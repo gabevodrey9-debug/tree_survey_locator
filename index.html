@@ -2,264 +2,423 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tree Survey Locator</title>
-
-<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-
 <style>
-:root {
-  --forest:#0f2318;
-  --leaf:#3d7a4f;
-  --leaf-dark:#244d34;
-  --amber:#d4910a;
-  --cream:#f0ebe0;
-  --muted:#9bb7a5;
-  --red:#c84b3a;
-  --line:rgba(255,255,255,0.13);
+:root{
+  --forest:#102219;
+  --panel:#172d22;
+  --leaf:#3f7d51;
+  --amber:#d99a18;
+  --cream:#f3eddf;
+  --muted:#a8bba8;
+  --line:rgba(255,255,255,.14);
+  --danger:#d96a5f;
 }
-
-* {
-  box-sizing:border-box;
-}
-
+*{box-sizing:border-box}
 body{
   margin:0;
   min-height:100vh;
-  background:
-    radial-gradient(circle at top left, rgba(61,122,79,0.35), transparent 35rem),
-    var(--forest);
+  background:linear-gradient(180deg,#102219 0%,#07120d 100%);
   color:var(--cream);
-  font-family:Spectral,serif;
+  font-family:Georgia,"Times New Roman",serif;
 }
-
 header{
-  padding:18px 20px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
+  padding:18px 16px;
   border-bottom:1px solid var(--line);
 }
-
-h1,
-h2,
-h3,
-p {
-  margin:0;
-}
-
-header h3 {
-  font-size:20px;
-}
-
+h1,h2,p{margin:0}
+h1{font-size:22px}
 main{
-  width:min(100%, 680px);
+  width:min(100%,720px);
   margin:auto;
-  padding:24px 18px 36px;
+  padding:18px 14px 34px;
+}
+.hero{
+  display:grid;
+  gap:14px;
+  justify-items:center;
+  padding:20px 0 22px;
   text-align:center;
 }
-
-.locator {
-  padding:28px 0 18px;
-}
-
 #locateBtn{
-  width:132px;
-  height:132px;
+  width:138px;
+  height:138px;
   border-radius:50%;
   border:2px solid var(--amber);
   background:var(--leaf);
   color:var(--cream);
-  font-size:44px;
-  cursor:pointer;
-  box-shadow:0 18px 48px rgba(0,0,0,0.28);
-  transition:transform 160ms ease, background 160ms ease;
-}
-
-#locateBtn:active {
-  transform:scale(0.97);
-}
-
-#locateBtn:disabled {
-  cursor:wait;
-  opacity:0.82;
-}
-
-.locate-label{
-  margin-top:12px;
-  font-family:"JetBrains Mono",monospace;
-  font-size:12px;
-  letter-spacing:2px;
-  color:var(--amber);
-  text-transform:uppercase;
-}
-
-.settings {
-  display:grid;
-  grid-template-columns:1fr auto;
-  gap:8px;
-  align-items:end;
-  margin:0 auto 18px;
-  text-align:left;
-}
-
-.settings label {
-  display:block;
-  margin-bottom:6px;
-  color:var(--muted);
-  font-family:"JetBrains Mono",monospace;
-  font-size:11px;
-  letter-spacing:1px;
-  text-transform:uppercase;
-}
-
-.settings input {
-  width:100%;
-  min-height:42px;
-  border:1px solid var(--line);
-  border-radius:8px;
-  background:rgba(255,255,255,0.06);
-  color:var(--cream);
-  font:14px "JetBrains Mono",monospace;
-  padding:9px 11px;
-}
-
-.btn{
-  min-height:42px;
-  padding:9px 13px;
-  border:1px solid var(--amber);
-  border-radius:8px;
-  background:var(--amber);
-  color:#1b1405;
-  cursor:pointer;
+  font-size:26px;
   font-weight:700;
+  cursor:pointer;
+  box-shadow:0 20px 45px rgba(0,0,0,.32);
 }
-
-.btn.secondary {
-  border-color:var(--line);
-  background:rgba(255,255,255,0.06);
-  color:var(--cream);
+#locateBtn:disabled{opacity:.75;cursor:wait}
+#status{
+  min-height:24px;
+  color:var(--amber);
+  font-family:Arial,sans-serif;
+  font-size:13px;
+  font-weight:700;
+  letter-spacing:1.6px;
+  text-transform:uppercase;
 }
-
-#keyStatus {
-  grid-column:1 / -1;
-  min-height:20px;
-  color:var(--muted);
-  font-size:14px;
-}
-
-.results {
+.grid{
   display:grid;
   gap:12px;
-  margin-top:18px;
 }
-
 .card{
-  padding:15px;
   border:1px solid var(--line);
   border-radius:8px;
-  background:rgba(255,255,255,0.045);
-  text-align:left;
+  background:rgba(255,255,255,.045);
+  padding:15px;
 }
-
-.card h2 {
-  margin-bottom:5px;
+.card h2{
+  margin-bottom:7px;
   color:var(--amber);
-  font:700 12px "JetBrains Mono",monospace;
-  letter-spacing:1px;
+  font-family:Arial,sans-serif;
+  font-size:12px;
+  letter-spacing:1.2px;
   text-transform:uppercase;
 }
-
-.value {
+.value{
+  font-size:22px;
+  line-height:1.28;
   overflow-wrap:anywhere;
-  font-size:18px;
+}
+.detail{
+  margin-top:6px;
+  color:var(--muted);
+  font-family:Arial,sans-serif;
+  font-size:14px;
   line-height:1.35;
 }
-
-.mono {
-  font-family:"JetBrains Mono",monospace;
-  font-size:15px;
+.actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:12px;
 }
-
-.small {
-  margin-top:5px;
-  color:var(--muted);
-  font-size:14px;
+button.small,a.small{
+  min-height:40px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.07);
+  color:var(--cream);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 10px;
+  text-decoration:none;
+  font:700 14px Arial,sans-serif;
+  cursor:pointer;
 }
-
-.error {
-  border-color:rgba(200,75,58,0.65);
-  color:#ffd9d4;
+input.text-field,textarea.text-field{
+  width:100%;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.07);
+  color:var(--cream);
+  padding:10px;
+  font:16px Arial,sans-serif;
 }
-
-@media (max-width:520px) {
-  header {
-    padding:15px 16px;
-  }
-
-  main {
-    padding-inline:14px;
-  }
-
-  .settings {
-    grid-template-columns:1fr;
-  }
-
-  .btn {
-    width:100%;
-  }
+textarea.text-field{
+  min-height:118px;
+  resize:vertical;
+  line-height:1.35;
+}
+.field-row{
+  display:grid;
+  gap:8px;
+  margin-top:12px;
+}
+a.primary,button.primary{
+  border-color:var(--amber);
+  background:var(--amber);
+  color:#191204;
+}
+.danger{border-color:rgba(217,106,95,.7)}
+.hidden{display:none}
+@media(max-width:520px){
+  .actions{grid-template-columns:1fr}
+  .value{font-size:20px}
 }
 </style>
 </head>
-
 <body>
-
 <header>
-  <h3>Tree Survey Locator</h3>
+  <h1>Tree Survey Locator</h1>
 </header>
 
 <main>
-  <section class="locator" aria-label="Location finder">
-    <button id="locateBtn" type="button" onclick="locate()" aria-label="Find my location">📍</button>
-    <div class="locate-label" id="label">Tap to locate</div>
+  <section class="hero">
+    <button id="locateBtn" type="button">LOCATE</button>
+    <div id="status">Tap to locate</div>
   </section>
 
-  <section class="settings" aria-label="what3words settings">
-    <div>
-      <label for="w3wKey">what3words API key</label>
-      <input id="w3wKey" type="password" autocomplete="off" placeholder="Paste key for ///words">
-    </div>
-    <button class="btn secondary" type="button" onclick="saveW3WKey()">Save</button>
-    <div id="keyStatus"></div>
-  </section>
-
-  <div class="results" id="out" aria-live="polite"></div>
+  <section id="results" class="grid"></section>
 </main>
 
 <script>
-const w3wInput = document.getElementById("w3wKey");
-const savedW3WKey = localStorage.getItem("w3w_key") || "";
+const locateBtn = document.getElementById("locateBtn");
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+let currentReport = null;
 
-if (savedW3WKey) {
-  w3wInput.value = savedW3WKey;
-  document.getElementById("keyStatus").textContent = "what3words key saved on this device.";
+locateBtn.addEventListener("click", locate);
+
+function setBusy(isBusy, text){
+  locateBtn.disabled = isBusy;
+  locateBtn.textContent = isBusy ? "..." : "LOCATE";
+  statusEl.textContent = text;
 }
 
-function saveW3WKey() {
-  const key = w3wInput.value.trim();
-  const status = document.getElementById("keyStatus");
+function escapeHtml(value){
+  return String(value)
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
 
-  if (!key) {
-    localStorage.removeItem("w3w_key");
-    status.textContent = "what3words key removed.";
+function card(id, title, value, detail="", actions=""){
+  return `
+    <article class="card" id="${id}">
+      <h2>${escapeHtml(title)}</h2>
+      <div class="value">${escapeHtml(value)}</div>
+      ${detail ? `<div class="detail">${escapeHtml(detail)}</div>` : ""}
+      ${actions}
+    </article>
+  `;
+}
+
+function actions(items){
+  return `<div class="actions">${items.join("")}</div>`;
+}
+
+function linkButton(label, href, primary=false){
+  return `<a class="small ${primary ? "primary" : ""}" href="${href}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+}
+
+function copyButton(label, value){
+  return `<button class="small" type="button" onclick="copyText('${encodeURIComponent(value)}')">${escapeHtml(label)}</button>`;
+}
+
+async function copyText(encoded){
+  const text = decodeURIComponent(encoded);
+  try{
+    await navigator.clipboard.writeText(text);
+    statusEl.textContent = "Copied";
+  }catch{
+    statusEl.textContent = "Could not copy";
+  }
+}
+
+function updateW3W(){
+  if(!currentReport) return;
+  const input = document.getElementById("w3wInput");
+  currentReport.w3w = input ? input.value.trim() : "";
+  updatePaperworkText();
+}
+
+function updatePaperworkText(){
+  const box = document.getElementById("paperworkText");
+  if(!box || !currentReport) return;
+
+  const w3wLine = currentReport.w3w ? `what3words: ${currentReport.w3w}` : "what3words: ";
+  box.value = [
+    `Grid ref: ${currentReport.gridRef}`,
+    `GPS: ${currentReport.coords}`,
+    w3wLine,
+    `Accuracy: about ${currentReport.accuracy} m`,
+    "Nearest A&E: use Google Maps/NHS finder link from locator"
+  ].join("\n");
+}
+
+function copyPaperwork(){
+  updateW3W();
+  const box = document.getElementById("paperworkText");
+  if(!box) return;
+  copyText(encodeURIComponent(box.value));
+}
+
+function locate(){
+  if(!navigator.geolocation){
+    resultsEl.innerHTML = card("error","Error","Location is not supported by this browser.","Use a modern mobile browser over HTTPS.");
     return;
   }
 
-  localStorage.setItem("w3w_key", key);
-  status.textContent = "what3words key saved on this device.";
+  setBusy(true,"Locating...");
+  resultsEl.innerHTML = "";
+
+  navigator.geolocation.getCurrentPosition(showLocation, showError, {
+    enableHighAccuracy:true,
+    timeout:12000,
+    maximumAge:0
+  });
 }
 
-function latLonToOSGrid(lat, lon) {
+async function showLocation(pos){
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  const accuracy = Math.round(pos.coords.accuracy);
+  const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  const gridRef = latLonToOSGrid(lat, lon);
+  const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("nearest A&E hospital near " + lat + "," + lon)}`;
+  const nhsFinder = "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/";
+  const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent("nearest A&E hospital")}`;
+  const w3wUrl = "https://what3words.com/";
+
+  currentReport = { gridRef, coords, accuracy, w3w:"" };
+
+  resultsEl.innerHTML = [
+    card(
+      "grid-ref",
+      "Six digit grid reference",
+      gridRef,
+      "Give this to the team or write it on the survey record.",
+      actions([copyButton("Copy grid ref", gridRef), copyButton("Copy all", `Grid ${gridRef}; GPS ${coords}`)])
+    ),
+    card(
+      "coords",
+      "GPS coordinates",
+      coords,
+      `Accuracy about ${accuracy} m.`,
+      actions([copyButton("Copy GPS", coords), linkButton("Open position", `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`)])
+    ),
+    `
+      <article class="card" id="w3w">
+        <h2>what3words</h2>
+        <div class="value">Paste ///words here</div>
+        <div class="detail">Free mode opens what3words for you, then this page stores it in your paperwork text.</div>
+        <div class="field-row">
+          <input class="text-field" id="w3wInput" type="text" placeholder="///filled.count.soap" oninput="updateW3W()">
+        </div>
+        ${actions([linkButton("Open what3words", w3wUrl, true), copyButton("Copy GPS for w3w", coords)])}
+      </article>
+    `,
+    `
+      <article class="card" id="paperwork">
+        <h2>Paperwork copy block</h2>
+        <textarea class="text-field" id="paperworkText" readonly></textarea>
+        ${actions([`<button class="small primary" type="button" onclick="copyPaperwork()">Copy paperwork text</button>`])}
+      </article>
+    `,
+    card(
+      "ae",
+      "Nearest A&E",
+      "Open a live finder",
+      "Free mode does not wait for slow databases. These buttons use your location immediately.",
+      actions([linkButton("Google Maps A&E", mapsSearch, true), linkButton("NHS finder", nhsFinder), linkButton("Directions", directions)])
+    )
+  ].join("");
+
+  setBusy(false,"Ready");
+  updatePaperworkText();
+  findFreeAE(lat, lon);
+}
+
+function showError(err){
+  setBusy(false,"Tap to locate");
+  resultsEl.innerHTML = card(
+    "error",
+    "Location error",
+    err.message,
+    "Check browser location permission and make sure the site is opened with HTTPS.",
+    "",
+    "danger"
+  );
+}
+
+async function findFreeAE(lat, lon){
+  const aeCard = document.getElementById("ae");
+  if(!aeCard) return;
+
+  const query = `
+    [out:json][timeout:6];
+    (
+      nwr["amenity"="hospital"]["emergency"="yes"](around:35000,${lat},${lon});
+      nwr["amenity"="hospital"]["emergency"="designated"](around:35000,${lat},${lon});
+      nwr["emergency"="emergency_ward_entrance"](around:35000,${lat},${lon});
+      nwr["amenity"="hospital"]["name"~"A&E|Accident|Emergency",i](around:35000,${lat},${lon});
+    );
+    out center tags;
+  `;
+
+  try{
+    const data = await fetchWithTimeout("https://overpass-api.de/api/interpreter", query, 8000);
+    const best = (data.elements || [])
+      .map(el => normaliseAE(el, lat, lon))
+      .filter(Boolean)
+      .sort((a,b) => a.distanceKm - b.distanceKm)[0];
+
+    if(best){
+      const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(best.name + " " + best.address)}`;
+      aeCard.innerHTML = `
+        <h2>Nearest A&E from free map data</h2>
+        <div class="value">${escapeHtml(best.name)}</div>
+        <div class="detail">${escapeHtml(`${best.address} | ${best.phone} | ${best.distanceKm.toFixed(1)} km away`)}</div>
+        ${actions([linkButton("Open in Maps", maps, true), linkButton("NHS finder", "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/")])}
+      `;
+    }
+  }catch{
+    aeCard.querySelector(".detail").textContent = "Free map lookup timed out. Use Google Maps or NHS finder.";
+  }
+}
+
+async function fetchWithTimeout(endpoint, query, ms){
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+
+  try{
+    const response = await fetch(endpoint, {
+      method:"POST",
+      body:"data=" + encodeURIComponent(query),
+      headers:{ "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8" },
+      signal:controller.signal
+    });
+    if(!response.ok) throw new Error("Map lookup failed");
+    return await response.json();
+  }finally{
+    clearTimeout(timeout);
+  }
+}
+
+function normaliseAE(el, lat, lon){
+  const placeLat = el.lat || el.center?.lat;
+  const placeLon = el.lon || el.center?.lon;
+  if(!placeLat || !placeLon || !el.tags) return null;
+
+  const tags = el.tags;
+  const address = [
+    tags["addr:housename"],
+    tags["addr:housenumber"],
+    tags["addr:street"],
+    tags["addr:city"],
+    tags["addr:postcode"]
+  ].filter(Boolean).join(", ");
+
+  return {
+    name:tags.name || tags.operator || "Unnamed A&E",
+    address:address || "Address not listed",
+    phone:tags.phone || tags["contact:phone"] || "Phone not listed",
+    distanceKm:haversineKm(lat, lon, placeLat, placeLon)
+  };
+}
+
+function haversineKm(lat1, lon1, lat2, lon2){
+  const r = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180) *
+    Math.cos(lat2*Math.PI/180) *
+    Math.sin(dLon/2)**2;
+  return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function latLonToOSGrid(lat, lon){
   const deg = Math.PI / 180;
   const a = 6377563.396;
   const b = 6356256.909;
@@ -268,21 +427,19 @@ function latLonToOSGrid(lat, lon) {
   const lon0 = -2 * deg;
   const n0 = -100000;
   const e0 = 400000;
-  const e2 = 1 - (b * b) / (a * a);
-  const n = (a - b) / (a + b);
-
-  const wgs84 = { a: 6378137, b: 6356752.3141 };
+  const e2 = 1 - (b*b)/(a*a);
+  const n = (a-b)/(a+b);
+  const wgsA = 6378137;
+  const wgsB = 6356752.3141;
+  const wgsE2 = 1 - (wgsB*wgsB)/(wgsA*wgsA);
   const phi = lat * deg;
   const lambda = lon * deg;
-  const h = 0;
   const sinPhi = Math.sin(phi);
   const cosPhi = Math.cos(phi);
-  const nu = wgs84.a / Math.sqrt(1 - (1 - (wgs84.b * wgs84.b) / (wgs84.a * wgs84.a)) * sinPhi * sinPhi);
-
-  const x1 = (nu + h) * cosPhi * Math.cos(lambda);
-  const y1 = (nu + h) * cosPhi * Math.sin(lambda);
-  const z1 = ((1 - (1 - (wgs84.b * wgs84.b) / (wgs84.a * wgs84.a))) * nu + h) * sinPhi;
-
+  const nu = wgsA / Math.sqrt(1 - wgsE2 * sinPhi * sinPhi);
+  const x1 = nu * cosPhi * Math.cos(lambda);
+  const y1 = nu * cosPhi * Math.sin(lambda);
+  const z1 = (1 - wgsE2) * nu * sinPhi;
   const tx = -446.448;
   const ty = 125.157;
   const tz = -542.06;
@@ -290,275 +447,53 @@ function latLonToOSGrid(lat, lon) {
   const rx = (-0.1502 / 3600) * deg;
   const ry = (-0.2470 / 3600) * deg;
   const rz = (-0.8421 / 3600) * deg;
+  const x2 = tx + (1+s)*x1 - rz*y1 + ry*z1;
+  const y2 = ty + rz*x1 + (1+s)*y1 - rx*z1;
+  const z2 = tz - ry*x1 + rx*y1 + (1+s)*z1;
+  const p = Math.sqrt(x2*x2 + y2*y2);
+  let phi2 = Math.atan2(z2, p * (1-e2));
+  let previous;
 
-  const x2 = tx + (1 + s) * x1 - rz * y1 + ry * z1;
-  const y2 = ty + rz * x1 + (1 + s) * y1 - rx * z1;
-  const z2 = tz - ry * x1 + rx * y1 + (1 + s) * z1;
-
-  const p = Math.sqrt(x2 * x2 + y2 * y2);
-  let phi2 = Math.atan2(z2, p * (1 - e2));
-  let phiPrev;
-
-  do {
-    phiPrev = phi2;
+  do{
+    previous = phi2;
     const nu2 = a / Math.sqrt(1 - e2 * Math.sin(phi2) * Math.sin(phi2));
     phi2 = Math.atan2(z2 + e2 * nu2 * Math.sin(phi2), p);
-  } while (Math.abs(phi2 - phiPrev) > 1e-10);
+  }while(Math.abs(phi2 - previous) > 1e-10);
 
   const lambda2 = Math.atan2(y2, x2);
   const sinPhi2 = Math.sin(phi2);
   const cosPhi2 = Math.cos(phi2);
   const tanPhi2 = Math.tan(phi2);
-  const nu2 = a * f0 / Math.sqrt(1 - e2 * sinPhi2 * sinPhi2);
-  const rho = a * f0 * (1 - e2) / Math.pow(1 - e2 * sinPhi2 * sinPhi2, 1.5);
-  const eta2 = nu2 / rho - 1;
-
-  const ma = (1 + n + (5 / 4) * n ** 2 + (5 / 4) * n ** 3) * (phi2 - lat0);
-  const mb = (3 * n + 3 * n ** 2 + (21 / 8) * n ** 3) * Math.sin(phi2 - lat0) * Math.cos(phi2 + lat0);
-  const mc = ((15 / 8) * n ** 2 + (15 / 8) * n ** 3) * Math.sin(2 * (phi2 - lat0)) * Math.cos(2 * (phi2 + lat0));
-  const md = (35 / 24) * n ** 3 * Math.sin(3 * (phi2 - lat0)) * Math.cos(3 * (phi2 + lat0));
-  const m = b * f0 * (ma - mb + mc - md);
-  const dLon = lambda2 - lon0;
-
-  const i = m + n0;
-  const ii = nu2 / 2 * sinPhi2 * cosPhi2;
-  const iii = nu2 / 24 * sinPhi2 * cosPhi2 ** 3 * (5 - tanPhi2 ** 2 + 9 * eta2);
-  const iiia = nu2 / 720 * sinPhi2 * cosPhi2 ** 5 * (61 - 58 * tanPhi2 ** 2 + tanPhi2 ** 4);
-  const iv = nu2 * cosPhi2;
-  const v = nu2 / 6 * cosPhi2 ** 3 * (nu2 / rho - tanPhi2 ** 2);
-  const vi = nu2 / 120 * cosPhi2 ** 5 * (5 - 18 * tanPhi2 ** 2 + tanPhi2 ** 4 + 14 * eta2 - 58 * tanPhi2 ** 2 * eta2);
-
-  const northing = i + ii * dLon ** 2 + iii * dLon ** 4 + iiia * dLon ** 6;
-  const easting = e0 + iv * dLon + v * dLon ** 3 + vi * dLon ** 5;
-
+  const nu2 = a*f0 / Math.sqrt(1 - e2*sinPhi2*sinPhi2);
+  const rho = a*f0*(1-e2) / Math.pow(1 - e2*sinPhi2*sinPhi2, 1.5);
+  const eta2 = nu2/rho - 1;
+  const ma = (1+n+5*n*n/4+5*n*n*n/4) * (phi2-lat0);
+  const mb = (3*n+3*n*n+21*n*n*n/8) * Math.sin(phi2-lat0) * Math.cos(phi2+lat0);
+  const mc = (15*n*n/8+15*n*n*n/8) * Math.sin(2*(phi2-lat0)) * Math.cos(2*(phi2+lat0));
+  const md = 35*n*n*n/24 * Math.sin(3*(phi2-lat0)) * Math.cos(3*(phi2+lat0));
+  const m = b*f0*(ma-mb+mc-md);
+  const dLon = lambda2-lon0;
+  const northing = m+n0 + (nu2/2*sinPhi2*cosPhi2)*dLon**2 + (nu2/24*sinPhi2*cosPhi2**3*(5-tanPhi2**2+9*eta2))*dLon**4;
+  const easting = e0 + nu2*cosPhi2*dLon + (nu2/6*cosPhi2**3*(nu2/rho-tanPhi2**2))*dLon**3;
   return formatGridRef(easting, northing);
 }
 
-function formatGridRef(easting, northing) {
-  if (!Number.isFinite(easting) || !Number.isFinite(northing)) return "Unavailable";
-
+function formatGridRef(easting, northing){
+  if(!Number.isFinite(easting) || !Number.isFinite(northing)) return "Unavailable";
   const e100k = Math.floor(easting / 100000);
   const n100k = Math.floor(northing / 100000);
+  if(e100k < 0 || e100k > 6 || n100k < 0 || n100k > 12) return "Outside OS Grid";
 
-  if (e100k < 0 || e100k > 6 || n100k < 0 || n100k > 12) return "Outside OS Grid";
+  let l1 = (19-n100k) - (19-n100k)%5 + Math.floor((e100k+10)/5);
+  let l2 = (19-n100k)*5%25 + e100k%5;
+  if(l1 > 7) l1++;
+  if(l2 > 7) l2++;
 
-  let l1 = (19 - n100k) - (19 - n100k) % 5 + Math.floor((e100k + 10) / 5);
-  let l2 = (19 - n100k) * 5 % 25 + e100k % 5;
-  if (l1 > 7) l1 += 1;
-  if (l2 > 7) l2 += 1;
-
-  const letters = String.fromCharCode(l1 + 65) + String.fromCharCode(l2 + 65);
-  const e = Math.floor((easting % 100000) / 100).toString().padStart(3, "0");
-  const n = Math.floor((northing % 100000) / 100).toString().padStart(3, "0");
-
+  const letters = String.fromCharCode(l1+65) + String.fromCharCode(l2+65);
+  const e = Math.floor((easting % 100000) / 100).toString().padStart(3,"0");
+  const n = Math.floor((northing % 100000) / 100).toString().padStart(3,"0");
   return `${letters} ${e} ${n}`;
 }
-
-function haversineKm(lat1, lon1, lat2, lon2) {
-  const r = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2;
-
-  return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-async function getW3W(lat, lon){
-  const key = localStorage.getItem("w3w_key");
-  if(!key) return { words:"No key saved", note:"Paste your what3words API key above and press Save." };
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
-
-  try{
-    const url = `https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat},${lon}&key=${encodeURIComponent(key)}`;
-    const r = await fetch(url, { signal: controller.signal });
-    const d = await r.json();
-
-    if (!r.ok || !d.words) {
-      return { words:"Unavailable", note:d.error?.message || "what3words did not return a result." };
-    }
-
-    return { words:`///${d.words}`, note:"" };
-  } catch (error) {
-    return {
-      words:"Unavailable",
-      note:error.name === "AbortError" ? "what3words timed out." : "Could not contact what3words."
-    };
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function getAE(lat, lon){
-  const radiuses = [15000, 35000, 75000];
-  const endpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter"
-  ];
-
-  for (const radius of radiuses) {
-    const query = `
-      [out:json][timeout:10];
-      (
-        nwr["amenity"="hospital"]["emergency"="yes"](around:${radius},${lat},${lon});
-        nwr["amenity"="hospital"]["emergency"="designated"](around:${radius},${lat},${lon});
-        nwr["emergency"="emergency_ward_entrance"](around:${radius},${lat},${lon});
-        nwr["healthcare:speciality"~"(^|;)(emergency|accident_and_emergency)(;|$)",i](around:${radius},${lat},${lon});
-        nwr["amenity"="hospital"]["emergency"="yes"](around:${radius},${lat},${lon});
-        nwr["amenity"="hospital"]["name"~"A&E|Accident|Emergency",i](around:${radius},${lat},${lon});
-      );
-      out center tags;
-    `;
-
-    const requests = endpoints.map((endpoint) => fetchOverpass(endpoint, query));
-
-    try{
-      const d = await Promise.any(requests);
-      const places = (d.elements || [])
-        .map((el) => normaliseAE(el, lat, lon))
-        .filter(Boolean)
-        .sort((a, b) => a.distanceKm - b.distanceKm);
-
-      if (places.length) return places[0];
-    } catch {
-      continue;
-    }
-  }
-
-  return null;
-}
-
-async function fetchOverpass(endpoint, query) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const r = await fetch(endpoint, {
-      method:"POST",
-      body:"data=" + encodeURIComponent(query),
-      headers:{ "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8" },
-      signal:controller.signal
-    });
-
-    if (!r.ok) throw new Error("Overpass error");
-    return await r.json();
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-function normaliseAE(el, lat, lon) {
-  const placeLat = el.lat || el.center?.lat;
-  const placeLon = el.lon || el.center?.lon;
-
-  if (!placeLat || !placeLon || !el.tags) return null;
-
-  const tags = el.tags;
-  const addressParts = [
-    tags["addr:housename"],
-    tags["addr:housenumber"],
-    tags["addr:street"],
-    tags["addr:city"],
-    tags["addr:postcode"]
-  ].filter(Boolean);
-
-  return {
-    name: tags.name || tags.operator || "Unnamed A&E",
-    address: addressParts.length ? addressParts.join(", ") : "Address not listed",
-    phone: tags.phone || tags["contact:phone"] || "Phone not listed",
-    distanceKm: haversineKm(lat, lon, placeLat, placeLon),
-    lat: placeLat,
-    lon: placeLon
-  };
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function renderCard(title, value, detail = "", className = "") {
-  return `
-    <div class="card ${className}">
-      <h2>${escapeHtml(title)}</h2>
-      <div class="value">${escapeHtml(value)}</div>
-      ${detail ? `<div class="small">${escapeHtml(detail)}</div>` : ""}
-    </div>
-  `;
-}
-
-async function locate(){
-  const btn = document.getElementById("locateBtn");
-  const out = document.getElementById("out");
-  const label = document.getElementById("label");
-
-  if (!navigator.geolocation) {
-    out.innerHTML = renderCard("Error", "Location is not supported by this browser.", "", "error");
-    return;
-  }
-
-  btn.textContent = "...";
-  btn.disabled = true;
-  label.textContent = "Locating...";
-  out.innerHTML = "";
-
-  navigator.geolocation.getCurrentPosition(async (pos)=>{
-    const lat = pos.coords.latitude;
-    const lon = pos.coords.longitude;
-    const accuracy = Math.round(pos.coords.accuracy);
-
-    label.textContent = "Building report...";
-
-    const grid = latLonToOSGrid(lat, lon);
-
-    out.innerHTML = [
-      renderCard("Coordinates", `${lat.toFixed(5)}, ${lon.toFixed(5)}`, `Accuracy about ${accuracy} m`, "mono"),
-      renderCard("Six digit grid reference", grid, "", "mono"),
-      renderCard("what3words", "Looking up...", "", "mono"),
-      renderCard("Nearest A&E", "Searching...", "Checking public map data.")
-    ].join("");
-
-    const [w3w, ae] = await Promise.all([
-      getW3W(lat, lon),
-      getAE(lat, lon)
-    ]);
-
-    out.innerHTML = [
-      renderCard("Coordinates", `${lat.toFixed(5)}, ${lon.toFixed(5)}`, `Accuracy about ${accuracy} m`, "mono"),
-      renderCard("Six digit grid reference", grid, "", "mono"),
-      renderCard("what3words", w3w.words, w3w.note, "mono"),
-      ae
-        ? renderCard(
-          "Nearest A&E",
-          ae.name,
-          `${ae.address} | ${ae.phone} | ${ae.distanceKm.toFixed(1)} km away`
-        )
-        : renderCard("Nearest A&E", "No A&E found", "No matching emergency department was found in the public map data.", "error")
-    ].join("");
-
-    btn.textContent = "📍";
-    btn.disabled = false;
-    label.textContent = "Tap to locate";
-  }, (err)=>{
-    out.innerHTML = renderCard("Error", err.message, "Location permission may need to be allowed for this site.", "error");
-    btn.textContent = "📍";
-    btn.disabled = false;
-    label.textContent = "Tap to locate";
-  }, {
-    enableHighAccuracy:true,
-    timeout:15000,
-    maximumAge:0
-  });
-}
 </script>
-
 </body>
 </html>
