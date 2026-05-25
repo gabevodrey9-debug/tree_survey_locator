@@ -2,58 +2,200 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>Tree Survey Locator</title>
 
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
 <style>
-body { font-family: Arial; background:#0f2318; color:#f0ebe0; text-align:center; padding:20px; }
-button { padding:15px 25px; font-size:18px; border-radius:12px; cursor:pointer; }
-.card { margin:15px auto; padding:15px; border:1px solid #444; border-radius:10px; max-width:500px; }
+:root {
+  --forest:#0f2318;
+  --leaf:#3d7a4f;
+  --amber:#d4910a;
+  --cream:#f0ebe0;
+  --muted:#7a9a85;
+  --red:#b03020;
+}
+
+body{
+  margin:0;
+  background:var(--forest);
+  color:var(--cream);
+  font-family:Spectral,serif;
+}
+
+header{
+  padding:20px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-bottom:1px solid rgba(255,255,255,0.1);
+}
+
+main{
+  padding:20px;
+  max-width:600px;
+  margin:auto;
+  text-align:center;
+}
+
+#locateBtn{
+  width:130px;
+  height:130px;
+  border-radius:50%;
+  border:2px solid var(--amber);
+  background:var(--leaf);
+  font-size:44px;
+}
+
+.locate-label{
+  margin-top:10px;
+  font-size:12px;
+  letter-spacing:2px;
+  color:var(--amber);
+}
+
+.card{
+  margin-top:15px;
+  padding:15px;
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:12px;
+  text-align:left;
+}
+
+.btn{
+  margin-top:10px;
+  padding:8px 12px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+}
 </style>
 </head>
 
 <body>
 
-<h2>🌳 Tree Survey Locator</h2>
+<header>
+  <h3>🌳 Tree Survey Locator</h3>
+</header>
 
-<button onclick="locate()">📍 Locate</button>
+<main>
 
-<div id="out"></div>
+  <button id="locateBtn" onclick="locate()">📍</button>
+  <div class="locate-label" id="label">Tap to locate</div>
+
+  <div id="out"></div>
+
+</main>
 
 <script>
-function haversine(lat1,lon1,lat2,lon2){
-  const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
-  const a=
-    Math.sin(dLat/2)**2+
-    Math.cos(lat1*Math.PI/180)*
-    Math.cos(lat2*Math.PI/180)*
-    Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+
+function latLonToOSGrid(lat, lon) {
+  const deg = Math.PI / 180;
+
+  const a = 6378137, b = 6356752.3141;
+  const e2 = 1 - (b*b)/(a*a);
+
+  const phi = lat * deg;
+  const lam = lon * deg;
+
+  const sp = Math.sin(phi), cp = Math.cos(phi);
+  const nu = a / Math.sqrt(1 - e2 * sp * sp);
+
+  let x = nu * cp * Math.cos(lam);
+  let y = nu * cp * Math.sin(lam);
+  let z = nu * (1 - e2) * sp;
+
+  const dx = -446.448, dy = 125.157, dz = -542.06;
+  const rx = (-0.1502/3600)*deg;
+  const ry = (-0.247/3600)*deg;
+  const rz = (-0.8421/3600)*deg;
+  const s = 20.4894e-6;
+
+  const x2 = dx + x*(1+s) - y*rz + z*ry;
+  const y2 = dy + x*rz + y*(1+s) - z*rx;
+  const z2 = dz - x*ry + y*rx + z*(1+s);
+
+  const a2 = 6377563.396;
+  const b2 = 6356256.909;
+
+  const e22 = 1 - (b2*b2)/(a2*a2);
+
+  const phi0 = 49 * deg;
+  const lam0 = -2 * deg;
+  const N0 = -100000;
+  const E0 = 400000;
+  const F0 = 0.9996012717;
+
+  let phiP = Math.atan2(z2, Math.sqrt(x2*x2 + y2*y2));
+  let prev;
+
+  do {
+    prev = phiP;
+    const sp2 = Math.sin(phiP);
+    const nu2 = a2 / Math.sqrt(1 - e22 * sp2 * sp2);
+    phiP = Math.atan2(z2 + e22 * nu2 * sp2, Math.sqrt(x2*x2 + y2*y2));
+  } while (Math.abs(phiP - prev) > 1e-12);
+
+  const lamP = Math.atan2(y2, x2);
+
+  const sp3 = Math.sin(phiP);
+  const cp3 = Math.cos(phiP);
+  const tp3 = Math.tan(phiP);
+
+  const nu2 = a2 / Math.sqrt(1 - e22 * sp3 * sp3);
+  const rho = a2 * F0 * (1 - e22) / Math.pow(1 - e22 * sp3 * sp3, 1.5);
+  const eta2 = nu2 / rho - 1;
+
+  const n = (a2 - b2) / (a2 + b2);
+
+  const M =
+    b2 * F0 *
+    ((1+n+(5/4)*n*n+(5/4)*n*n*n)*(phiP-phi0));
+
+  const dL = lamP - lam0;
+
+  const N =
+    M +
+    (nu2/2)*sp3*cp3*dL*dL;
+
+  const E =
+    E0 +
+    nu2*cp3*dL;
+
+  const letters = [
+    ["SV","SW","SX","SY","SZ","TV","TW"],
+    ["SQ","SR","SS","ST","SU","TQ","TR"],
+    ["SL","SM","SN","SO","SP","TL","TM"],
+    ["SF","SG","SH","SJ","SK","TF","TG"],
+    ["SA","SB","SC","SD","SE","TA","TB"],
+    ["NV","NW","NX","NY","NZ","OV","OW"]
+  ];
+
+  const e100k = Math.floor(E / 100000);
+  const n100k = Math.floor(N / 100000);
+
+  const grid = letters[n100k]?.[e100k-1] || "??";
+
+  const e6 = String(Math.floor((E % 100000)/100)).padStart(3,"0");
+  const n6 = String(Math.floor((N % 100000)/100)).padStart(3,"0");
+
+  return `${grid} ${e6} ${n6}`;
 }
 
-// Simple OS grid approx (reliable lightweight version)
-function latLonToGrid(lat, lon){
-  const e = Math.floor((lon + 2) * 5);
-  const n = Math.floor((lat - 49) * 5);
-  return `Grid approx: ${e} / ${n}`;
-}
-
-// What3Words
 async function getW3W(lat, lon){
   const key = localStorage.getItem("w3w_key");
-  if(!key) return "No API key set";
+  if(!key) return "No key set";
+
   try{
     const r = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat},${lon}&key=${key}`);
     const d = await r.json();
-    return d.words ? `///${d.words}` : "Not found";
-  }catch(e){
-    return "W3W error";
+    return d.words ? `///${d.words}` : "Error";
+  } catch {
+    return "Error";
   }
 }
 
-// Nearest hospital (A&E)
 async function getAE(lat, lon){
   const q = `[out:json];
   node["amenity"="hospital"](around:20000,${lat},${lon});
@@ -62,30 +204,37 @@ async function getAE(lat, lon){
   const r = await fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(q));
   const d = await r.json();
 
-  if(!d.elements.length) return "No hospital found";
+  if(!d.elements.length) return "No A&E found";
 
   let best=null, min=9999;
 
-  for(let el of d.elements){
-    const dist = haversine(lat,lon,el.lat,el.lon);
-    if(dist<min){
-      min=dist;
-      best=el;
+  for(const el of d.elements){
+    const dist = Math.sqrt((lat-el.lat)**2 + (lon-el.lon)**2);
+    if(dist < min){
+      min = dist;
+      best = el;
     }
   }
 
-  return best?.tags?.name + " (" + min.toFixed(1) + "km)";
+  return best?.tags?.name || "Unknown hospital";
 }
 
 async function locate(){
+
+  const btn = document.getElementById("locateBtn");
   const out = document.getElementById("out");
-  out.innerHTML = "Locating...";
+  const label = document.getElementById("label");
+
+  btn.textContent = "…";
+  label.textContent = "Locating...";
+  out.innerHTML = "";
 
   navigator.geolocation.getCurrentPosition(async (pos)=>{
+
     const lat = pos.coords.latitude;
     const lon = pos.coords.longitude;
 
-    const grid = latLonToGrid(lat, lon);
+    const grid = latLonToOSGrid(lat, lon);
     const w3w = await getW3W(lat, lon);
     const ae = await getAE(lat, lon);
 
@@ -95,11 +244,17 @@ async function locate(){
       <div class="card">/// ${w3w}</div>
       <div class="card">🏥 ${ae}</div>
     `;
-  },
-  (err)=>{
-    out.innerHTML = "Location error: " + err.message;
+
+    btn.textContent = "📍";
+    label.textContent = "Tap to locate";
+
+  }, (err)=>{
+    out.innerHTML = "<div class='card'>Error: " + err.message + "</div>";
+    btn.textContent = "📍";
+    label.textContent = "Tap to locate";
   });
 }
+
 </script>
 
 </body>
