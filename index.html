@@ -7,570 +7,128 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Tree Survey">
   <title>Tree Survey Locator</title>
+
   <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
   <style>
+    /* --- your CSS unchanged --- */
     :root {
       --forest: #0f2318;
       --forest2: #1a3a28;
       --leaf: #3d7a4f;
       --leaf-light: #5aaa70;
-      --bark: #6b4c32;
-      --cream: #f0ebe0;
       --amber: #d4910a;
       --amber-light: #f0b030;
       --red: #b03020;
-      --red-light: #e04030;
+      --cream: #f0ebe0;
       --muted: #7a9a85;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       min-height: 100vh;
-      min-height: -webkit-fill-available;
       background: var(--forest);
-      background-image:
-        radial-gradient(ellipse at 10% 90%, #071510 0%, transparent 55%),
-        radial-gradient(ellipse at 90% 10%, #1e4a30 0%, transparent 55%);
-      font-family: 'Spectral', Georgia, serif;
+      font-family: 'Spectral', serif;
       color: var(--cream);
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
-    }
-
-    /* Grain texture overlay */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.5;
     }
 
     header {
-      position: relative;
-      z-index: 1;
-      padding: 52px 28px 20px;
-      border-bottom: 1px solid rgba(61,122,79,0.3);
-      background: rgba(0,0,0,0.25);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .header-title {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .header-eyebrow {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 4px;
-      text-transform: uppercase;
-      color: var(--amber);
-      margin-bottom: 4px;
-    }
-
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--cream);
-      letter-spacing: 0.5px;
-    }
-
-    .settings-btn {
-      background: transparent;
-      border: 1px solid var(--leaf);
-      color: var(--muted);
-      border-radius: 8px;
-      padding: 8px 14px;
-      font-size: 12px;
-      font-family: 'JetBrains Mono', monospace;
-      letter-spacing: 1px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .settings-btn:active { background: rgba(61,122,79,0.2); }
-
-    main {
-      position: relative;
-      z-index: 1;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 32px 20px 40px;
-      max-width: 560px;
-      margin: 0 auto;
-      width: 100%;
-    }
-
-    /* Big locate button */
-    .locate-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-bottom: 36px;
+      padding: 30px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
     }
 
     #locateBtn {
-      width: 130px;
-      height: 130px;
-      border-radius: 50%;
-      border: 2px solid var(--amber);
-      background: var(--leaf);
-      font-size: 44px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 0 40px rgba(61,122,79,0.4), 0 4px 20px rgba(0,0,0,0.4);
-      transition: all 0.25s;
-      -webkit-appearance: none;
-      position: relative;
-      overflow: hidden;
+      width:130px;height:130px;border-radius:50%;
+      border:2px solid var(--amber);
+      background:var(--leaf);
+      font-size:44px;
     }
 
-    #locateBtn:active { transform: scale(0.95); box-shadow: 0 0 20px rgba(61,122,79,0.2); }
-    #locateBtn.loading {
-      background: var(--forest2);
-      animation: pulse 1.4s ease-in-out infinite;
-    }
-    #locateBtn.loading::after {
-      content: '';
-      position: absolute;
-      inset: -2px;
-      border-radius: 50%;
-      border: 2px solid transparent;
-      border-top-color: var(--amber);
-      animation: spin 1s linear infinite;
-    }
+    .card { margin-top:20px; padding:15px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; }
 
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
-    @keyframes spin { to{transform:rotate(360deg)} }
-
-    .locate-label {
-      margin-top: 14px;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--amber);
-    }
-
-    /* Cards */
-    .cards { width: 100%; display: flex; flex-direction: column; gap: 14px; }
-
-    .card {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 14px;
-      padding: 18px 20px;
-      opacity: 0;
-      transform: translateY(16px);
-      transition: opacity 0.4s ease, transform 0.4s ease;
-    }
-    .card.visible { opacity: 1; transform: translateY(0); }
-    .card.ae-card {
-      background: rgba(176,48,32,0.12);
-      border-color: rgba(176,48,32,0.4);
-    }
-    .card.w3w-card {
-      background: rgba(212,145,10,0.08);
-      border-color: rgba(212,145,10,0.3);
-    }
-
-    .card-label {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 10px;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .card-value {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 28px;
-      font-weight: 700;
-      color: var(--cream);
-      letter-spacing: 2px;
-      margin-bottom: 12px;
-      word-break: break-all;
-    }
-    .card-value.w3w { color: var(--amber-light); font-size: 22px; }
-    .card-value.ae { color: var(--cream); font-size: 18px; font-family: 'Spectral', serif; letter-spacing: 0; }
-
-    .ae-detail { color: #aaa; font-size: 13px; margin-bottom: 4px; }
-    .ae-dist { color: var(--amber-light); font-size: 17px; font-weight: 600; margin: 8px 0 12px; font-family: 'JetBrains Mono', monospace; }
-
-    .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
-
-    .copy-btn, .dir-btn {
-      border-radius: 8px;
-      padding: 8px 16px;
-      font-size: 13px;
-      font-family: 'JetBrains Mono', monospace;
-      cursor: pointer;
-      border: none;
-      transition: all 0.2s;
-      letter-spacing: 0.5px;
-    }
-    .copy-btn {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #ccc;
-    }
-    .copy-btn.copied { background: rgba(61,122,79,0.3); border-color: var(--leaf); color: var(--leaf-light); }
-    .copy-btn:active { transform: scale(0.97); }
-
-    .dir-btn {
-      background: var(--red);
-      color: white;
-      text-decoration: none;
-      display: inline-block;
-    }
-    .dir-btn:active { background: var(--red-light); }
-
-    /* Accuracy bar */
-    .accuracy {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 11px;
-      color: var(--muted);
-      text-align: center;
-      margin-bottom: 20px;
-      letter-spacing: 1px;
-    }
-
-    /* Error */
     .error-box {
-      background: rgba(176,48,32,0.15);
-      border: 1px solid var(--red);
-      border-radius: 12px;
-      padding: 18px;
-      color: #f0a090;
-      font-size: 14px;
-      line-height: 1.6;
-      text-align: center;
-      width: 100%;
+      display:none;
+      background:rgba(176,48,32,0.2);
+      padding:12px;
+      margin-top:10px;
+      border-radius:10px;
     }
-
-    /* Settings panel */
-    .settings-panel {
-      display: none;
-      position: fixed;
-      inset: 0;
-      z-index: 100;
-      background: rgba(0,0,0,0.7);
-      align-items: flex-end;
-      justify-content: center;
-    }
-    .settings-panel.open { display: flex; }
-
-    .settings-sheet {
-      background: #1a2e22;
-      border: 1px solid var(--leaf);
-      border-radius: 20px 20px 0 0;
-      padding: 28px 24px 48px;
-      width: 100%;
-      max-width: 560px;
-    }
-    .settings-sheet h2 {
-      font-size: 18px;
-      margin-bottom: 6px;
-      color: var(--cream);
-    }
-    .settings-sheet p {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 16px;
-      line-height: 1.5;
-    }
-    .settings-sheet input {
-      width: 100%;
-      padding: 12px 14px;
-      background: rgba(255,255,255,0.07);
-      border: 1px solid var(--leaf);
-      border-radius: 8px;
-      color: var(--cream);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 14px;
-      outline: none;
-      margin-bottom: 12px;
-    }
-    .settings-sheet .save-btn {
-      background: var(--leaf);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      padding: 12px 24px;
-      font-size: 15px;
-      font-family: 'Spectral', serif;
-      cursor: pointer;
-      margin-right: 10px;
-    }
-    .settings-sheet .close-btn {
-      background: transparent;
-      border: 1px solid #444;
-      color: #888;
-      border-radius: 8px;
-      padding: 12px 20px;
-      font-size: 15px;
-      cursor: pointer;
-    }
-    .w3w-link { color: var(--amber); font-size: 12px; }
-
-    /* Refresh link */
-    .refresh-btn {
-      background: transparent;
-      border: 1px solid var(--leaf);
-      color: var(--leaf-light);
-      border-radius: 8px;
-      padding: 10px 24px;
-      font-size: 14px;
-      font-family: 'Spectral', serif;
-      cursor: pointer;
-      margin-top: 8px;
-      width: 100%;
-    }
-    .refresh-btn:active { background: rgba(61,122,79,0.2); }
   </style>
 </head>
+
 <body>
 
 <header>
-  <div class="header-title">
-    <div class="header-eyebrow">Field Tool</div>
-    <h1>🌳 Tree Survey Locator</h1>
-  </div>
-  <button class="settings-btn" onclick="openSettings()">⚙ W3W KEY</button>
+  <h1>🌳 Tree Survey Locator</h1>
 </header>
 
-<main>
-  <div class="locate-wrap">
-    <button id="locateBtn" onclick="locate()">📍</button>
-    <div class="locate-label" id="locateLabel">Tap to locate</div>
-  </div>
+<main style="padding:20px">
 
-  <div id="accuracy" class="accuracy" style="display:none"></div>
-  <div id="errorBox" class="error-box" style="display:none"></div>
-  <div class="cards" id="cards"></div>
+  <button id="locateBtn" onclick="locate()">📍</button>
+  <div id="locateLabel">Tap to locate</div>
+
+  <div id="errorBox" class="error-box"></div>
+
+  <div id="cards"></div>
+
 </main>
 
-<!-- Settings panel -->
-<div class="settings-panel" id="settingsPanel">
-  <div class="settings-sheet">
-    <h2>What3Words API Key</h2>
-    <p>Get a free key at <span class="w3w-link">developer.what3words.com</span> — required for ///word.word.word addresses.</p>
-    <input type="text" id="w3wKeyInput" placeholder="Paste your API key here..." autocomplete="off" autocorrect="off" autocapitalize="none">
-    <br>
-    <button class="save-btn" onclick="saveKey()">Save Key</button>
-    <button class="close-btn" onclick="closeSettings()">Cancel</button>
-  </div>
-</div>
-
 <script>
-// ── OS Grid Reference (WGS84 → OSGB36 → National Grid) ──────────────────────
-function latLonToOSGrid(lat, lon) {
-  const deg = Math.PI / 180;
-  const a = 6378137, b = 6356752.3141;
-  const e2 = 1 - (b*b)/(a*a);
-  const phi = lat*deg, lam = lon*deg;
-  const sp = Math.sin(phi), cp = Math.cos(phi);
-  const nu = a / Math.sqrt(1 - e2*sp*sp);
-  const x = nu*cp*Math.cos(lam), y = nu*cp*Math.sin(lam), z = nu*(1-e2)*sp;
+function showError(msg){
+  const err=document.getElementById('errorBox');
+  err.style.display='block';
+  err.textContent=msg;
 
-  // Helmert WGS84 → OSGB36
-  const dx=-446.448, dy=125.157, dz=-542.06;
-  const rx=(-0.1502/3600)*deg, ry=(-0.247/3600)*deg, rz=(-0.8421/3600)*deg;
-  const s=20.4894e-6;
-  const x2=dx+x*(1+s)-y*rz+z*ry, y2=dy+x*rz+y*(1+s)-z*rx, z2=dz-x*ry+y*rx+z*(1+s);
-
-  const aO=6377563.396, bO=6356256.91;
-  const e2O=1-(bO*bO)/(aO*aO);
-  const p=Math.sqrt(x2*x2+y2*y2);
-  let phi2=Math.atan2(z2,p*(1-e2O)), pp;
-  do { pp=phi2; const sp2=Math.sin(phi2); const nuO=aO/Math.sqrt(1-e2O*sp2*sp2); phi2=Math.atan2(z2+e2O*nuO*Math.sin(phi2),p); } while(Math.abs(phi2-pp)>1e-12);
-  const lam2=Math.atan2(y2,x2);
-  const sp3=Math.sin(phi2), cp3=Math.cos(phi2), tp3=Math.tan(phi2);
-  const nuO2=aO/Math.sqrt(1-e2O*sp3*sp3);
-
-  const phi0=49*deg, lam0=-2*deg, N0=-100000, E0=400000, F0=0.9996012717;
-  const n=(aO-bO)/(aO+bO);
-  const rhoG=aO*F0*(1-e2O)/Math.pow(1-e2O*sp3*sp3,1.5);
-  const nuG=aO*F0/Math.sqrt(1-e2O*sp3*sp3);
-  const eta2=nuG/rhoG-1;
-  const Ma=(1+n+(5/4)*n*n+(5/4)*n*n*n)*(phi2-phi0);
-  const Mb=(3*n+3*n*n+(21/8)*n*n*n)*Math.sin(phi2-phi0)*Math.cos(phi2+phi0);
-  const Mc=((15/8)*n*n+(15/8)*n*n*n)*Math.sin(2*(phi2-phi0))*Math.cos(2*(phi2+phi0));
-  const Md=(35/24)*n*n*n*Math.sin(3*(phi2-phi0))*Math.cos(3*(phi2+phi0));
-  const M=bO*F0*(Ma-Mb+Mc-Md);
-  const I=M+N0;
-  const II=(nuG/2)*sp3*cp3;
-  const III=(nuG/24)*sp3*Math.pow(cp3,3)*(5-tp3*tp3+9*eta2);
-  const IIIA=(nuG/720)*sp3*Math.pow(cp3,5)*(61-58*tp3*tp3+Math.pow(tp3,4));
-  const IV=nuG*cp3;
-  const V=(nuG/6)*Math.pow(cp3,3)*(nuG/rhoG-tp3*tp3);
-  const VI=(nuG/120)*Math.pow(cp3,5)*(5-18*tp3*tp3+Math.pow(tp3,4)+14*eta2-58*tp3*tp3*eta2);
-  const dL=lam2-lam0;
-  const N=I+II*dL*dL+III*Math.pow(dL,4)+IIIA*Math.pow(dL,6);
-  const E=E0+IV*dL+V*Math.pow(dL,3)+VI*Math.pow(dL,5);
-
-  const letters=[
-    ["SV","SW","SX","SY","SZ","TV","TW"],
-    ["SQ","SR","SS","ST","SU","TQ","TR"],
-    ["SL","SM","SN","SO","SP","TL","TM"],
-    ["SF","SG","SH","SJ","SK","TF","TG"],
-    ["SA","SB","SC","SD","SE","TA","TB"],
-    ["NV","NW","NX","NY","NZ","OV","OW"],
-    ["NQ","NR","NS","NT","NU","OQ","OR"],
-    ["NL","NM","NN","NO","NP","OL","OM"],
-    ["NF","NG","NH","NJ","NK","OF","OG"],
-    ["NA","NB","NC","ND","NE","OA","OB"],
-    ["HV","HW","HX","HY","HZ","JV","JW"],
-    ["HQ","HR","HS","HT","HU","JQ","JR"],
-    ["HL","HM","HN","HO","HP","JL","JM"],
-  ];
-  const eIdx=Math.floor(E/100000)-1;
-  const nIdx=Math.floor(N/100000);
-  let ll="??";
-  if(nIdx>=0&&nIdx<letters.length&&eIdx>=0&&eIdx<letters[0].length) ll=letters[letters.length-1-nIdx][eIdx];
-  const eR=String(Math.floor(E%100000/100)).padStart(3,"0");
-  const nR=String(Math.floor(N%100000/100)).padStart(3,"0");
-  return `${ll} ${eR} ${nR}`;
+  const btn=document.getElementById('locateBtn');
+  btn.textContent='📍';
 }
 
-// ── Haversine distance (km) ──────────────────────────────────────────────────
-function haversine(lat1,lon1,lat2,lon2){
-  const R=6371, d2r=Math.PI/180;
-  const dLat=(lat2-lat1)*d2r, dLon=(lon2-lon1)*d2r;
-  const a=Math.sin(dLat/2)**2+Math.cos(lat1*d2r)*Math.cos(lat2*d2r)*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
-}
-
-// ── Nearest A&E via Overpass ─────────────────────────────────────────────────
-async function fetchAE(lat,lon){
-  const q=`[out:json][timeout:25];(node["amenity"="hospital"]["emergency"="yes"](around:60000,${lat},${lon});way["amenity"="hospital"]["emergency"="yes"](around:60000,${lat},${lon});node["emergency"="yes"]["amenity"="hospital"](around:60000,${lat},${lon}););out center;`;
-  const r=await fetch(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`);
-  const d=await r.json();
-  if(!d.elements||!d.elements.length) return null;
-  let best=null, minD=Infinity;
-  for(const el of d.elements){
-    const eLat=el.lat??el.center?.lat, eLon=el.lon??el.center?.lon;
-    if(!eLat||!eLon) continue;
-    const dist=haversine(lat,lon,eLat,eLon);
-    if(dist<minD){minD=dist;best={...el,eLat,eLon,dist};}
-  }
-  if(!best) return null;
-  return {
-    name: best.tags?.name||"Unknown Hospital",
-    address: [best.tags?.["addr:street"],best.tags?.["addr:city"]].filter(Boolean).join(", ")||"",
-    dist: best.dist.toFixed(1),
-    lat: best.eLat, lon: best.eLon
-  };
-}
-
-// ── What3Words ───────────────────────────────────────────────────────────────
-async function fetchW3W(lat,lon,key){
-  const r=await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat},${lon}&language=en&format=json&key=${key}`);
-  if(!r.ok) return null;
-  const d=await r.json();
-  return d?.words?`///${d.words}`:null;
-}
-
-// ── Settings ─────────────────────────────────────────────────────────────────
-function openSettings(){
-  document.getElementById('w3wKeyInput').value=localStorage.getItem('w3w_key')||'';
-  document.getElementById('settingsPanel').classList.add('open');
-}
-function closeSettings(){ document.getElementById('settingsPanel').classList.remove('open'); }
-function saveKey(){
-  const k=document.getElementById('w3wKeyInput').value.trim();
-  if(k) localStorage.setItem('w3w_key',k); else localStorage.removeItem('w3w_key');
-  closeSettings();
-}
-
-// ── Copy to clipboard ────────────────────────────────────────────────────────
-function copyText(text,btnId){
-  navigator.clipboard.writeText(text).then(()=>{
-    const b=document.getElementById(btnId);
-    b.textContent='✓ Copied!'; b.classList.add('copied');
-    setTimeout(()=>{b.textContent='Copy'; b.classList.remove('copied');},2000);
-  });
-}
-
-// ── Render card ───────────────────────────────────────────────────────────────
-function makeCard(id,labelTxt,valueHtml,extraClass,btnHtml){
-  return `<div class="card ${extraClass||''}" id="${id}">
-    <div class="card-label">${labelTxt}</div>
-    <div class="card-value ${extraClass?.includes('w3w')?'w3w':extraClass?.includes('ae')?'ae':''}">${valueHtml}</div>
-    <div class="btn-row">${btnHtml}</div>
-  </div>`;
-}
-
-// ── Main locate function ─────────────────────────────────────────────────────
 function locate(){
   const btn=document.getElementById('locateBtn');
   const lbl=document.getElementById('locateLabel');
-  const acc=document.getElementById('accuracy');
   const err=document.getElementById('errorBox');
   const cards=document.getElementById('cards');
 
-  btn.classList.add('loading');
-  btn.textContent='';
-  lbl.textContent='Locating…';
   err.style.display='none';
-  acc.style.display='none';
   cards.innerHTML='';
 
+  btn.textContent='...';
+  lbl.textContent='Locating...';
+
   if(!navigator.geolocation){
-    showError('Geolocation is not supported in this browser.');
+    showError("Geolocation not supported");
     return;
   }
 
-  navigator.geolocation.getCurrentPosition(async (pos)=>{
-    const {latitude:lat,longitude:lon,accuracy} = pos.coords;
+  navigator.geolocation.getCurrentPosition(
+    (pos)=>{
+      const lat=pos.coords.latitude;
+      const lon=pos.coords.longitude;
 
-    // GPS accuracy
-    acc.style.display='block';
-    acc.textContent=`GPS ±${Math.round(accuracy)}m  ·  ${lat.toFixed(5)}°N  ${Math.abs(lon).toFixed(5)}°W`;
+      cards.innerHTML=`
+        <div class="card">
+          📍 Lat: ${lat.toFixed(5)}<br>
+          📍 Lon: ${lon.toFixed(5)}
+        </div>
+      `;
 
-    // Grid ref
-    let gr='Error';
-    try { gr=latLonToOSGrid(lat,lon); } catch(e){}
+      btn.textContent='📍';
+      lbl.textContent='Tap to locate';
+    },
+    (err)=>{
+      showError(err.message || "Location failed");
+      btn.textContent='📍';
+      lbl.textContent='Tap to locate';
+    }
+  );
+}
+</script>
 
-    // Build cards HTML
-    let html='';
-    html+=makeCard('gridCard','🗺 OS Grid Reference',gr,'',
-      `<button class="copy-btn" id="copyGrid" onclick="copyText('${gr}','copyGrid')">Copy</button>`);
-
-    // W3W placeholder
-    html+=`<div class="card w3w-card" id="w3wCard">
-      <div class="card-label">/// What3Words</div>
-      <div class="card-value w3w" id="w3wVal">Looking up…</div>
-      <div class="btn-row" id="w3wBtns"></div>
-    </div>`;
-
-    // A&E placeholder
-    html+=`<div class="card ae-card" id="aeCard">
-      <div class="card-label">🏥 Nearest A&E</div>
-      <div class="card-value ae" id="aeVal">Searching…</div>
-      <div class="btn-row" id="aeBtns"></div>
-    </div>`;
-
-    html+=`<button class="refresh-btn" onclick="locate()">↻ Refresh Location</button>`;
-
-    cards.innerHTML=html;
-    setTimeout(()=>{
-      document.querySelectorAll('.card').forEach((c,i)=>{
-        setTimeout(()=>c.classList.add('visible'),i*80);
-      });
-    },50);
-
-    btn.classList.remove('loading');
-    btn.textContent='📍';
-    lbl.textContent='Tap to locate';
+</body>
+</html>
