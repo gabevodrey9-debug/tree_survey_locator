@@ -139,6 +139,13 @@ a.primary,button.primary{
 }
 .danger{border-color:rgba(217,106,95,.7)}
 .hidden{display:none}
+.asset-line{
+  margin-top:5px;
+  font-family:Arial,sans-serif;
+  font-size:14px;
+  line-height:1.38;
+}
+.asset-line strong{color:var(--cream)}
 @media(max-width:520px){
   .actions{grid-template-columns:1fr}
   .value{font-size:20px}
@@ -159,6 +166,7 @@ a.primary,button.primary{
   <section id="results" class="grid"></section>
 </main>
 
+<script src="span-data-current.js"></script>
 <script>
 const locateBtn = document.getElementById("locateBtn");
 const statusEl = document.getElementById("status");
@@ -226,14 +234,35 @@ function updatePaperworkText(){
   const box = document.getElementById("paperworkText");
   if(!box || !currentReport) return;
 
-  const w3wLine = currentReport.w3w ? `what3words: ${currentReport.w3w}` : "what3words: ";
-  box.value = [
-    `Grid ref: ${currentReport.gridRef}`,
-    `GPS: ${currentReport.coords}`,
+  box.value = buildPaperworkText(currentReport, currentReport.nearestSpan);
+}
+
+function buildPaperworkText(report, span){
+  if(!report) return "";
+  const w3wLine = report.w3w ? `what3words: ${report.w3w}` : "what3words: ";
+  const lines = [
+    `Grid ref: ${report.gridRef}`,
+    `GPS: ${report.coords}`,
     w3wLine,
-    `Accuracy: about ${currentReport.accuracy} m`,
-    "Nearest A&E: use Google Maps/NHS finder link from locator"
-  ].join("\n");
+    `Accuracy: about ${report.accuracy} m`
+  ];
+
+  if(span){
+    lines.push(
+      `Voltage: ${span.voltage || ""}`,
+      `Span: ${span.span || ""}`,
+      `To pole: ${span.toPole || ""}`,
+      `Primary: ${span.primaryNo || ""} ${span.primaryName || ""}`.trim(),
+      `HV feeder: ${span.hvFeeder || ""}`,
+      `Dist No: ${span.distNo || ""}`,
+      `Circuit: ${span.circuitName || ""}`,
+      `Asset grid ref: ${span.gridRef || ""}`,
+      `Distance from GPS: ${span.distanceM} m`
+    );
+  }
+
+  lines.push("Nearest A&E: use Google Maps/NHS finder link from locator");
+  return lines.join("\n");
 }
 
 function copyPaperwork(){
@@ -269,8 +298,9 @@ async function showLocation(pos){
   const nhsFinder = "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/";
   const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent("nearest A&E hospital")}`;
   const w3wUrl = "https://what3words.com/";
+  const nearestSpan = findNearestSpan(lat, lon);
 
-  currentReport = { gridRef, coords, accuracy, w3w:"" };
+  currentReport = { gridRef, coords, accuracy, w3w:"", nearestSpan };
 
   resultsEl.innerHTML = [
     card(
@@ -305,6 +335,7 @@ async function showLocation(pos){
         ${actions([`<button class="small primary" type="button" onclick="copyPaperwork()">Copy paperwork text</button>`])}
       </article>
     `,
+    renderSpanCard(nearestSpan),
     card(
       "ae",
       "Nearest A&E",
@@ -317,6 +348,51 @@ async function showLocation(pos){
   setBusy(false,"Ready");
   updatePaperworkText();
   findFreeAE(lat, lon);
+}
+
+function findNearestSpan(lat, lon){
+  const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
+  return spans
+    .filter((span) => Number.isFinite(span.latitude) && Number.isFinite(span.longitude))
+    .map((span) => ({
+      ...span,
+      distanceM: Math.round(haversineKm(lat, lon, span.latitude, span.longitude) * 1000)
+    }))
+    .sort((a, b) => a.distanceM - b.distanceM)[0] || null;
+}
+
+function renderSpanCard(span){
+  if(!span){
+    return card("span","Nearest span","No span data loaded","Add span-data-current.js beside this page to enable span autofill.");
+  }
+
+  return `
+    <article class="card" id="span">
+      <h2>Nearest span from your data</h2>
+      <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
+      <div class="detail">${escapeHtml(`${span.distanceM} m away | ${span.gridRef || "No grid ref"}`)}</div>
+      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
+      <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
+      <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
+      <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
+      ${actions([copyButton("Copy span info", spanCopyText(span)), copyButton("Copy all with span", buildPaperworkText(currentReport, span))])}
+    </article>
+  `;
+}
+
+function spanCopyText(span){
+  if(!span) return "";
+  return [
+    `Voltage: ${span.voltage || ""}`,
+    `Span: ${span.span || ""}`,
+    `To pole: ${span.toPole || ""}`,
+    `Primary: ${span.primaryNo || ""} ${span.primaryName || ""}`.trim(),
+    `HV feeder: ${span.hvFeeder || ""}`,
+    `Dist No: ${span.distNo || ""}`,
+    `Circuit: ${span.circuitName || ""}`,
+    `Asset grid ref: ${span.gridRef || ""}`,
+    `Distance from GPS: ${span.distanceM} m`
+  ].join("\n");
 }
 
 function showError(err){
