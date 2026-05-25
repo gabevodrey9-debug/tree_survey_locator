@@ -482,6 +482,7 @@ function renderLocationCards(options){
   };
 
   resultsEl.innerHTML = [
+    renderSpanCard(options.nearestSpan, options.spanTitle),
     card(
       "grid-ref",
       "Grid reference",
@@ -500,15 +501,14 @@ function renderLocationCards(options){
         ${actions([linkButton("Open what3words", w3wUrl, true)])}
       </article>
     `,
-    renderSpanCard(options.nearestSpan, options.spanTitle),
-    renderMightyFieldsCards(options.nearestSpan, options.gridRef),
     card(
       "ae",
       "Nearest A&E",
       "Open a live finder",
       "Free mode does not wait for slow databases. These buttons use your location immediately.",
       actions([linkButton("Google Maps A&E", mapsSearch, true), linkButton("NHS finder", nhsFinder), linkButton("Directions", directions)])
-    )
+    ),
+    renderMightyFieldsCards(options.nearestSpan, options.gridRef)
   ].join("");
 }
 
@@ -536,7 +536,7 @@ function renderSpanCard(span, title="Nearest span from your data"){
       <h2>${escapeHtml(title)}</h2>
       <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
       <div class="detail">${escapeHtml(detail)}</div>
-      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
+      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(primarySubValue(span) || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
@@ -577,7 +577,15 @@ function renderFieldCard(id, title, value){
 }
 
 function primarySubValue(span){
-  return `${span.primaryNo || ""} ${span.primaryName || ""}`.trim();
+  return `${span.primaryNo || ""} ${cleanPrimaryName(span.primaryName)}`.trim();
+}
+
+function cleanPrimaryName(name){
+  return String(name || "")
+    .replace(/\s*132\s*\/\s*11\s*kV\s*DUMMY\s*/ig, "")
+    .replace(/\s*132\s*\/\s*11\s*kv\s*dummy\s*/ig, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function spanCopyText(span){
