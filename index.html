@@ -1,172 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <title>Tree Survey Locator</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tree Survey Locator</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-
-  <style>
-    body { font-family: Spectral, serif; background:#0f2318; color:#f0ebe0; margin:0; padding:0; }
-    header { padding:20px; border-bottom:1px solid #333; }
-    main { padding:20px; display:flex; flex-direction:column; gap:15px; align-items:center; }
-
-    #locateBtn {
-      width:120px;height:120px;border-radius:50%;
-      border:2px solid #d4910a;
-      background:#3d7a4f;
-      font-size:40px;
-    }
-
-    .card {
-      width:100%;
-      max-width:420px;
-      padding:15px;
-      border:1px solid rgba(255,255,255,0.15);
-      border-radius:12px;
-      background:rgba(255,255,255,0.05);
-      word-break:break-word;
-    }
-
-    .label { font-size:12px; opacity:0.7; margin-bottom:6px; }
-    .value { font-family:"JetBrains Mono", monospace; font-size:16px; }
-
-    .error { background:#3a1a1a; padding:10px; border-radius:10px; display:none; }
-  </style>
+<style>
+body { font-family: Arial; background:#0f2318; color:#f0ebe0; text-align:center; padding:20px; }
+button { padding:15px 25px; font-size:18px; border-radius:12px; cursor:pointer; }
+.card { margin:15px auto; padding:15px; border:1px solid #444; border-radius:10px; max-width:500px; }
+</style>
 </head>
 
 <body>
 
-<header>
-  <h2>🌳 Tree Survey Locator</h2>
-</header>
+<h2>🌳 Tree Survey Locator</h2>
 
-<main>
+<button onclick="locate()">📍 Locate</button>
 
-  <button id="locateBtn">📍</button>
-  <div id="status">Tap to locate</div>
-
-  <div id="error" class="error"></div>
-
-  <div id="output"></div>
-
-</main>
+<div id="out"></div>
 
 <script>
-function showError(msg){
-  const e=document.getElementById("error");
-  e.style.display="block";
-  e.textContent=msg;
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371;
+  const dLat=(lat2-lat1)*Math.PI/180;
+  const dLon=(lon2-lon1)*Math.PI/180;
+  const a=
+    Math.sin(dLat/2)**2+
+    Math.cos(lat1*Math.PI/180)*
+    Math.cos(lat2*Math.PI/180)*
+    Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
-function osGrid(lat, lon){
-  const latRad = lat * Math.PI/180;
-  const lonRad = lon * Math.PI/180;
-
-  const a = 6377563.396, b = 6356256.909;
-  const e2 = 1 - (b*b)/(a*a);
-
-  const nu = a / Math.sqrt(1 - e2 * Math.sin(latRad)**2);
-  const x = nu * Math.cos(latRad) * Math.cos(lonRad);
-  const y = nu * Math.cos(latRad) * Math.sin(lonRad);
-
-  const easting = Math.round(400000 + y) % 100000;
-  const northing = Math.round(500000 + x) % 100000;
-
-  return `${easting.toString().padStart(5,"0")} ${northing.toString().padStart(5,"0")}`;
+// Simple OS grid approx (reliable lightweight version)
+function latLonToGrid(lat, lon){
+  const e = Math.floor((lon + 2) * 5);
+  const n = Math.floor((lat - 49) * 5);
+  return `Grid approx: ${e} / ${n}`;
 }
 
-async function fetchW3W(lat, lon){
+// What3Words
+async function getW3W(lat, lon){
   const key = localStorage.getItem("w3w_key");
-  if(!key) return "No API key";
-
+  if(!key) return "No API key set";
   try{
     const r = await fetch(`https://api.what3words.com/v3/convert-to-3wa?coordinates=${lat},${lon}&key=${key}`);
     const d = await r.json();
-    return d.words ? "///" + d.words : "W3W error";
-  }catch{
-    return "W3W failed";
+    return d.words ? `///${d.words}` : "Not found";
+  }catch(e){
+    return "W3W error";
   }
 }
 
-async function fetchAE(lat, lon){
-  const q = `
-  [out:json];
-  (
-    node["amenity"="hospital"]["emergency"="yes"](around:50000,${lat},${lon});
-  );
-  out;
-  `;
+// Nearest hospital (A&E)
+async function getAE(lat, lon){
+  const q = `[out:json];
+  node["amenity"="hospital"](around:20000,${lat},${lon});
+  out;`;
 
-  try{
-    const r = await fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(q));
-    const d = await r.json();
-    if(!d.elements.length) return "No A&E found";
+  const r = await fetch("https://overpass-api.de/api/interpreter?data=" + encodeURIComponent(q));
+  const d = await r.json();
 
-    const h = d.elements[0];
-    return h.tags?.name || "Unknown hospital";
-  }catch{
-    return "A&E lookup failed";
+  if(!d.elements.length) return "No hospital found";
+
+  let best=null, min=9999;
+
+  for(let el of d.elements){
+    const dist = haversine(lat,lon,el.lat,el.lon);
+    if(dist<min){
+      min=dist;
+      best=el;
+    }
   }
+
+  return best?.tags?.name + " (" + min.toFixed(1) + "km)";
 }
 
-function locate(){
-
-  const btn=document.getElementById("locateBtn");
-  const status=document.getElementById("status");
-  const out=document.getElementById("output");
-  const err=document.getElementById("error");
-
-  err.style.display="none";
-  out.innerHTML="";
-  status.textContent="Locating...";
-  btn.textContent="...";
+async function locate(){
+  const out = document.getElementById("out");
+  out.innerHTML = "Locating...";
 
   navigator.geolocation.getCurrentPosition(async (pos)=>{
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
 
-    const lat=pos.coords.latitude;
-    const lon=pos.coords.longitude;
+    const grid = latLonToGrid(lat, lon);
+    const w3w = await getW3W(lat, lon);
+    const ae = await getAE(lat, lon);
 
-    const grid=osGrid(lat,lon);
-    const w3w=await fetchW3W(lat,lon);
-    const ae=await fetchAE(lat,lon);
-
-    out.innerHTML=`
-      <div class="card">
-        <div class="label">Coordinates</div>
-        <div class="value">${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
-      </div>
-
-      <div class="card">
-        <div class="label">OS Grid Reference</div>
-        <div class="value">${grid}</div>
-      </div>
-
-      <div class="card">
-        <div class="label">What3Words</div>
-        <div class="value">${w3w}</div>
-      </div>
-
-      <div class="card">
-        <div class="label">Nearest A&E</div>
-        <div class="value">${ae}</div>
-      </div>
+    out.innerHTML = `
+      <div class="card">📍 ${lat.toFixed(5)}, ${lon.toFixed(5)}</div>
+      <div class="card">🗺 ${grid}</div>
+      <div class="card">/// ${w3w}</div>
+      <div class="card">🏥 ${ae}</div>
     `;
-
-    status.textContent="Found";
-    btn.textContent="📍";
-
-  },(e)=>{
-    showError(e.message);
-    status.textContent="Failed";
-    btn.textContent="📍";
+  },
+  (err)=>{
+    out.innerHTML = "Location error: " + err.message;
   });
 }
-
-document.getElementById("locateBtn").addEventListener("click", locate);
 </script>
 
 </body>
