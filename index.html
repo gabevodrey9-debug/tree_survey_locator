@@ -5,23 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Tree Survey">
+  <meta name="mobile-web-app-capable" content="yes">
   <title>Tree Survey Locator</title>
 
   <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 
   <style>
-    /* --- your CSS unchanged --- */
     :root {
       --forest: #0f2318;
-      --forest2: #1a3a28;
       --leaf: #3d7a4f;
-      --leaf-light: #5aaa70;
       --amber: #d4910a;
-      --amber-light: #f0b030;
-      --red: #b03020;
       --cream: #f0ebe0;
-      --muted: #7a9a85;
+      --red: #b03020;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -36,28 +31,46 @@
     }
 
     header {
-      padding: 30px;
+      padding: 20px;
       border-bottom: 1px solid rgba(255,255,255,0.1);
       display:flex;
       justify-content:space-between;
       align-items:center;
     }
 
+    main {
+      padding: 20px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 20px;
+    }
+
     #locateBtn {
-      width:130px;height:130px;border-radius:50%;
+      width:130px;
+      height:130px;
+      border-radius:50%;
       border:2px solid var(--amber);
       background:var(--leaf);
       font-size:44px;
+      cursor:pointer;
     }
-
-    .card { margin-top:20px; padding:15px; border:1px solid rgba(255,255,255,0.1); border-radius:12px; }
 
     .error-box {
       display:none;
       background:rgba(176,48,32,0.2);
       padding:12px;
-      margin-top:10px;
       border-radius:10px;
+      width:100%;
+      max-width:400px;
+    }
+
+    .card {
+      padding:15px;
+      border:1px solid rgba(255,255,255,0.1);
+      border-radius:12px;
+      width:100%;
+      max-width:400px;
     }
   </style>
 </head>
@@ -68,9 +81,9 @@
   <h1>🌳 Tree Survey Locator</h1>
 </header>
 
-<main style="padding:20px">
+<main>
 
-  <button id="locateBtn" onclick="locate()">📍</button>
+  <button id="locateBtn">📍</button>
   <div id="locateLabel">Tap to locate</div>
 
   <div id="errorBox" class="error-box"></div>
@@ -84,9 +97,6 @@ function showError(msg){
   const err=document.getElementById('errorBox');
   err.style.display='block';
   err.textContent=msg;
-
-  const btn=document.getElementById('locateBtn');
-  btn.textContent='📍';
 }
 
 function locate(){
@@ -100,6 +110,8 @@ function locate(){
 
   btn.textContent='...';
   lbl.textContent='Locating...';
+
+  console.log("locate triggered");
 
   if(!navigator.geolocation){
     showError("Geolocation not supported");
@@ -128,6 +140,14 @@ function locate(){
     }
   );
 }
+
+/* IMPORTANT FIX: force global scope */
+window.locate = locate;
+
+/* safer than inline onclick */
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("locateBtn").addEventListener("click", locate);
+});
 </script>
 
 </body>
