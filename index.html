@@ -132,6 +132,23 @@ textarea.text-field{
   gap:8px;
   margin-top:12px;
 }
+.search-panel{
+  margin-bottom:14px;
+}
+.search-form{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  align-items:center;
+}
+.search-form .small{
+  min-width:96px;
+}
+.match-list{
+  display:grid;
+  gap:10px;
+  margin-top:12px;
+}
 a.primary,button.primary{
   border-color:var(--amber);
   background:var(--amber);
@@ -148,6 +165,7 @@ a.primary,button.primary{
 .asset-line strong{color:var(--cream)}
 @media(max-width:520px){
   .actions{grid-template-columns:1fr}
+  .search-form{grid-template-columns:1fr}
   .value{font-size:20px}
 }
 </style>
@@ -163,6 +181,16 @@ a.primary,button.primary{
     <div id="status">Tap to locate</div>
   </section>
 
+  <section class="card search-panel">
+    <h2>Find span</h2>
+    <form class="search-form" onsubmit="searchSpan(event)">
+      <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref">
+      <button class="small primary" type="submit">Search</button>
+    </form>
+    <div class="detail" id="spanSearchStatus">Search your uploaded LV/HV span data.</div>
+    <div class="match-list" id="spanSearchResults"></div>
+  </section>
+
   <section id="results" class="grid"></section>
 </main>
 
@@ -171,6 +199,9 @@ a.primary,button.primary{
 const locateBtn = document.getElementById("locateBtn");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
+const spanSearchInput = document.getElementById("spanSearchInput");
+const spanSearchStatus = document.getElementById("spanSearchStatus");
+const spanSearchResults = document.getElementById("spanSearchResults");
 let currentReport = null;
 
 locateBtn.addEventListener("click", locate);
@@ -227,49 +258,133 @@ function updateW3W(){
   if(!currentReport) return;
   const input = document.getElementById("w3wInput");
   currentReport.w3w = input ? input.value.trim() : "";
-  updatePaperworkText();
 }
 
-function updatePaperworkText(){
-  const box = document.getElementById("paperworkText");
-  if(!box || !currentReport) return;
+function searchSpan(event){
+  event.preventDefault();
+  const query = spanSearchInput.value.trim();
 
-  box.value = buildPaperworkText(currentReport, currentReport.nearestSpan);
-}
-
-function buildPaperworkText(report, span){
-  if(!report) return "";
-  const w3wLine = report.w3w ? `what3words: ${report.w3w}` : "what3words: ";
-  const lines = [
-    `Grid ref: ${report.gridRef}`,
-    `GPS: ${report.coords}`,
-    w3wLine,
-    `Accuracy: about ${report.accuracy} m`
-  ];
-
-  if(span){
-    lines.push(
-      `Voltage: ${span.voltage || ""}`,
-      `Span: ${span.span || ""}`,
-      `To pole: ${span.toPole || ""}`,
-      `Primary: ${span.primaryNo || ""} ${span.primaryName || ""}`.trim(),
-      `HV feeder: ${span.hvFeeder || ""}`,
-      `Dist No: ${span.distNo || ""}`,
-      `Circuit: ${span.circuitName || ""}`,
-      `Asset grid ref: ${span.gridRef || ""}`,
-      `Distance from GPS: ${span.distanceM} m`
-    );
+  if(!query){
+    spanSearchStatus.textContent = "Enter a span, pole, feeder, circuit, primary, or grid reference.";
+    spanSearchResults.innerHTML = "";
+    return;
   }
 
-  lines.push("Nearest A&E: use Google Maps/NHS finder link from locator");
-  return lines.join("\n");
+  const matches = findSpanMatches(query, 5);
+
+  if(!matches.length){
+    spanSearchStatus.textContent = `No matches found for "${query}".`;
+    spanSearchResults.innerHTML = "";
+    return;
+  }
+
+  spanSearchStatus.textContent = `${matches.length} best match${matches.length === 1 ? "" : "es"} for "${query}".`;
+  spanSearchResults.innerHTML = matches.map((span, index) => renderSpanSearchResult(span, index)).join("");
 }
 
-function copyPaperwork(){
-  updateW3W();
-  const box = document.getElementById("paperworkText");
-  if(!box) return;
-  copyText(encodeURIComponent(box.value));
+function findSpanMatches(query, limit=5){
+  const terms = normaliseSearchText(query).split(" ").filter(Boolean);
+  const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
+  if(!terms.length || !spans.length) return [];
+
+  return spans
+    .map((span) => ({ ...span, score: scoreSpanMatch(span, terms) }))
+    .filter((span) => span.score > 0)
+    .sort((a, b) => b.score - a.score || String(a.span).localeCompare(String(b.span)))
+    .slice(0, limit);
+}
+
+function scoreSpanMatch(span, terms){
+  const weightedFields = [
+    [span.span, 90],
+    [span.toPole, 70],
+    [span.externalReference, 70],
+    [span.gridRef, 60],
+    [span.hvFeeder, 50],
+    [span.circuitName, 45],
+    [span.distNo, 40],
+    [span.primaryNo, 35],
+    [span.primaryName, 30],
+    [span.feederName, 25],
+    [span.voltage, 15]
+  ];
+
+  let score = 0;
+  const voltage = normaliseSearchText(span.voltage || "");
+  const compactSpan = compactSearchText(span.span || "");
+  const compactExternal = compactSearchText(span.externalReference || "");
+  const spanBaseDigits = String(span.span || "").split("/")[0].replace(/\D/g, "");
+
+  for(const term of terms){
+    let termScore = 0;
+    const compactTerm = compactSearchText(term);
+
+    if(voltage.startsWith("lv") && lvTailMatches(spanBaseDigits, compactTerm)){
+      termScore = Math.max(termScore, 260);
+    }
+
+    if(voltage.startsWith("hv") && compactTerm.length >= 2 && compactSpan.startsWith(compactTerm)){
+      termScore = Math.max(termScore, compactTerm.length >= 4 ? 260 : 210);
+    }
+
+    if(compactTerm && (compactSpan === compactTerm || compactExternal === compactTerm)){
+      termScore = Math.max(termScore, 300);
+    }
+
+    for(const [value, weight] of weightedFields){
+      const text = normaliseSearchText(value || "");
+      const compactText = compactSearchText(value || "");
+      if(!text) continue;
+      if(text === term) termScore = Math.max(termScore, weight * 3);
+      else if(compactText === compactTerm) termScore = Math.max(termScore, weight * 3);
+      else if(text.startsWith(term)) termScore = Math.max(termScore, weight * 2);
+      else if(compactText.startsWith(compactTerm)) termScore = Math.max(termScore, weight * 2);
+      else if(text.includes(term)) termScore = Math.max(termScore, weight);
+      else if(compactText.includes(compactTerm)) termScore = Math.max(termScore, weight);
+    }
+    if(termScore === 0) return 0;
+    score += termScore;
+  }
+
+  return score;
+}
+
+function normaliseSearchText(value){
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function compactSearchText(value){
+  return String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function lvTailMatches(spanBaseDigits, term){
+  if(!spanBaseDigits || !/^\d{1,4}$/.test(term)) return false;
+  const tail = spanBaseDigits.slice(-4);
+  return stripLeadingZeroes(tail) === stripLeadingZeroes(term) || tail === term.padStart(4, "0");
+}
+
+function stripLeadingZeroes(value){
+  return String(value).replace(/^0+/, "") || "0";
+}
+
+function renderSpanSearchResult(span, index){
+  return `
+    <article class="card" id="span-search-${index}">
+      <h2>Span match</h2>
+      <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
+      <div class="detail">${escapeHtml(span.gridRef || "No grid ref")}</div>
+      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
+      <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
+      <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
+      <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
+      ${actions([copyButton("Copy span info", spanCopyText(span))])}
+    </article>
+  `;
 }
 
 function locate(){
@@ -308,7 +423,7 @@ async function showLocation(pos){
       "Six digit grid reference",
       gridRef,
       "Give this to the team or write it on the survey record.",
-      actions([copyButton("Copy grid ref", gridRef), copyButton("Copy all", `Grid ${gridRef}; GPS ${coords}`)])
+      actions([copyButton("Copy grid ref", gridRef)])
     ),
     card(
       "coords",
@@ -321,18 +436,11 @@ async function showLocation(pos){
       <article class="card" id="w3w">
         <h2>what3words</h2>
         <div class="value">Paste ///words here</div>
-        <div class="detail">Free mode opens what3words for you, then this page stores it in your paperwork text.</div>
+        <div class="detail">Free mode opens what3words for you, then you can copy it back into MightyFields.</div>
         <div class="field-row">
           <input class="text-field" id="w3wInput" type="text" placeholder="///filled.count.soap" oninput="updateW3W()">
         </div>
         ${actions([linkButton("Open what3words", w3wUrl, true), copyButton("Copy GPS for w3w", coords)])}
-      </article>
-    `,
-    `
-      <article class="card" id="paperwork">
-        <h2>Paperwork copy block</h2>
-        <textarea class="text-field" id="paperworkText" readonly></textarea>
-        ${actions([`<button class="small primary" type="button" onclick="copyPaperwork()">Copy paperwork text</button>`])}
       </article>
     `,
     renderSpanCard(nearestSpan),
@@ -346,7 +454,6 @@ async function showLocation(pos){
   ].join("");
 
   setBusy(false,"Ready");
-  updatePaperworkText();
   findFreeAE(lat, lon);
 }
 
@@ -375,7 +482,7 @@ function renderSpanCard(span){
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([copyButton("Copy span info", spanCopyText(span)), copyButton("Copy all with span", buildPaperworkText(currentReport, span))])}
+      ${actions([copyButton("Copy span info", spanCopyText(span))])}
     </article>
   `;
 }
