@@ -302,7 +302,7 @@ function loadStoredSpanData(){
 function updateSpanDataStatus(message=""){
   const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
   spanDataStatus.textContent = message || (count
-    ? `${count} span records loaded privately on this device.`
+    ? `${count} spans imported.`
     : "No span spreadsheet imported on this device.");
   spanSearchStatus.textContent = count
     ? "Search your imported LV/HV span data."
@@ -334,7 +334,7 @@ async function importSpanFiles(){
     localStorage.setItem("treeSurveySpanData", JSON.stringify(imported));
     currentSpanMatches = [];
     spanSearchResults.innerHTML = "";
-    updateSpanDataStatus(`${imported.length} span records imported and saved on this device.`);
+    updateSpanDataStatus(`${imported.length} spans imported.`);
   }catch(error){
     updateSpanDataStatus(error.message || "Could not import that spreadsheet.");
   }
@@ -568,10 +568,19 @@ function stripLeadingZeroes(value){
 }
 
 function renderSpanSearchResult(span, index){
+  const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
+  const mainValue = isLv && span.toPole
+    ? `LV To Pole ${span.toPole}`
+    : `${span.voltage || "Unknown"} ${span.span || "Unknown span"}`;
+  const detail = isLv
+    ? `${span.voltage || "LV"} span ${span.span || "Unknown span"}`
+    : "";
+
   return `
     <article class="card" id="span-search-${index}">
       <h2>Span match</h2>
-      <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
+      <div class="value">${escapeHtml(mainValue)}</div>
+      ${detail ? `<div class="detail">${escapeHtml(detail)}</div>` : ""}
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
