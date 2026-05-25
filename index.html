@@ -149,6 +149,11 @@ textarea.text-field{
   gap:10px;
   margin-top:12px;
 }
+.field-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+}
 a.primary,button.primary{
   border-color:var(--amber);
   background:var(--amber);
@@ -166,6 +171,7 @@ a.primary,button.primary{
 @media(max-width:520px){
   .actions{grid-template-columns:1fr}
   .search-form{grid-template-columns:1fr}
+  .field-grid{grid-template-columns:1fr}
   .value{font-size:20px}
 }
 </style>
@@ -380,12 +386,11 @@ function renderSpanSearchResult(span, index){
     <article class="card" id="span-search-${index}">
       <h2>Span match</h2>
       <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
-      <div class="detail">${escapeHtml(span.gridRef || "No grid ref")}</div>
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([`<button class="small primary" type="button" onclick="useSpanFromSearch(${index})">Use this span</button>`, copyButton("Copy span info", spanCopyText(span))])}
+      ${actions([`<button class="small primary" type="button" onclick="useSpanFromSearch(${index})">Use grid ref</button>`, copyButton("Copy span info", spanCopyText(span))])}
     </article>
   `;
 }
@@ -410,7 +415,7 @@ function fillFromSpanRecord(span){
     lon: span.longitude,
     accuracy: "",
     gridRef,
-    gridDetail: span.gridRef ? `Spreadsheet grid ref: ${span.gridRef}` : "Grid reference calculated from spreadsheet coordinates.",
+    gridDetail: "Six-figure grid reference from the selected span.",
     nearestSpan: selectedSpan,
     spanTitle: "Selected span from search",
     sourceNote: "Filled from your uploaded span spreadsheet."
@@ -484,13 +489,6 @@ function renderLocationCards(options){
       options.gridDetail || "",
       actions([copyButton("Copy grid ref", options.gridRef)])
     ),
-    card(
-      "coords",
-      "GPS coordinates",
-      coords,
-      accuracy === "" ? (options.sourceNote || "") : `Accuracy about ${accuracy} m.`,
-      actions([copyButton("Copy GPS", coords), linkButton("Open position", `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`)])
-    ),
     `
       <article class="card" id="w3w">
         <h2>what3words</h2>
@@ -499,10 +497,11 @@ function renderLocationCards(options){
         <div class="field-row">
           <input class="text-field" id="w3wInput" type="text" placeholder="///filled.count.soap" oninput="updateW3W()">
         </div>
-        ${actions([linkButton("Open what3words", w3wUrl, true), copyButton("Copy GPS for w3w", coords)])}
+        ${actions([linkButton("Open what3words", w3wUrl, true)])}
       </article>
     `,
     renderSpanCard(options.nearestSpan, options.spanTitle),
+    renderMightyFieldsCards(options.nearestSpan, options.gridRef),
     card(
       "ae",
       "Nearest A&E",
@@ -528,12 +527,15 @@ function renderSpanCard(span, title="Nearest span from your data"){
   if(!span){
     return card("span","Nearest span","No span data loaded","Add span-data-current.js beside this page to enable span autofill.");
   }
+  const detail = Number.isFinite(span.distanceM) && span.distanceM > 0
+    ? `${span.distanceM} m away`
+    : "Filled from your span data";
 
   return `
     <article class="card" id="span">
       <h2>${escapeHtml(title)}</h2>
       <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
-      <div class="detail">${escapeHtml(`${span.distanceM} m away | ${span.gridRef || "No grid ref"}`)}</div>
+      <div class="detail">${escapeHtml(detail)}</div>
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
@@ -543,19 +545,53 @@ function renderSpanCard(span, title="Nearest span from your data"){
   `;
 }
 
+function renderMightyFieldsCards(span, siteGridRef){
+  if(!span) return "";
+
+  const fields = [
+    ["primary-sub", "Primary Sub name and no.", primarySubValue(span)],
+    ["feeder", "Feeder name or no.", span.hvFeeder || span.feederName || ""],
+    ["line-no", "Line no.", span.span || ""],
+    ["lv-sub-name", "LV sub name", span.circuitName || ""],
+    ["lv-sub-no", "LV sub no.", span.distNo || ""],
+    ["managed-unit", "Managed unit no.", span.toPole || ""],
+    ["site-grid", "Site grid ref.", siteGridRef || ""]
+  ];
+
+  return `
+    <section class="field-grid" id="mf-fields">
+      ${fields.map(([id, title, value]) => renderFieldCard(id, title, value)).join("")}
+    </section>
+  `;
+}
+
+function renderFieldCard(id, title, value){
+  const displayValue = value || "Not listed";
+  return card(
+    `mf-${id}`,
+    title,
+    displayValue,
+    "",
+    value ? actions([copyButton("Copy", value)]) : ""
+  );
+}
+
+function primarySubValue(span){
+  return `${span.primaryNo || ""} ${span.primaryName || ""}`.trim();
+}
+
 function spanCopyText(span){
   if(!span) return "";
   return [
     `Voltage: ${span.voltage || ""}`,
     `Span: ${span.span || ""}`,
     `To pole: ${span.toPole || ""}`,
-    `Primary: ${span.primaryNo || ""} ${span.primaryName || ""}`.trim(),
+    `Primary: ${primarySubValue(span)}`,
     `HV feeder: ${span.hvFeeder || ""}`,
     `Dist No: ${span.distNo || ""}`,
     `Circuit: ${span.circuitName || ""}`,
-    `Asset grid ref: ${span.gridRef || ""}`,
-    `Distance from GPS: ${span.distanceM} m`
-  ].join("\n");
+    Number.isFinite(span.distanceM) && span.distanceM > 0 ? `Distance from GPS: ${span.distanceM} m` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function formatSpreadsheetGridRef(gridRef){
