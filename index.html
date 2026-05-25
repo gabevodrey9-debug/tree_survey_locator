@@ -122,6 +122,11 @@ input.text-field,textarea.text-field{
   padding:10px;
   font:16px Arial,sans-serif;
 }
+input.file-field{
+  width:100%;
+  color:var(--cream);
+  font:14px Arial,sans-serif;
+}
 textarea.text-field{
   min-height:118px;
   resize:vertical;
@@ -188,6 +193,18 @@ a.primary,button.primary{
   </section>
 
   <section class="card search-panel">
+    <h2>Span data</h2>
+    <div class="field-row">
+      <input class="file-field" id="spanFileInput" type="file" accept=".csv,.xlsx,.xls" multiple>
+    </div>
+    <div class="detail" id="spanDataStatus">No span spreadsheet imported on this device.</div>
+    <div class="actions">
+      <button class="small primary" type="button" onclick="importSpanFiles()">Import spreadsheet</button>
+      <button class="small" type="button" onclick="clearSpanData()">Clear data</button>
+    </div>
+  </section>
+
+  <section class="card search-panel">
     <h2>Find span</h2>
     <form class="search-form" onsubmit="searchSpan(event)">
       <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref">
@@ -200,18 +217,22 @@ a.primary,button.primary{
   <section id="results" class="grid"></section>
 </main>
 
-<script src="span-data-current.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script>
 const locateBtn = document.getElementById("locateBtn");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
+const spanFileInput = document.getElementById("spanFileInput");
+const spanDataStatus = document.getElementById("spanDataStatus");
 const spanSearchInput = document.getElementById("spanSearchInput");
 const spanSearchStatus = document.getElementById("spanSearchStatus");
 const spanSearchResults = document.getElementById("spanSearchResults");
 let currentReport = null;
 let currentSpanMatches = [];
+window.SPAN_DATA = [];
 
 locateBtn.addEventListener("click", locate);
+loadStoredSpanData();
 
 function setBusy(isBusy, text){
   locateBtn.disabled = isBusy;
@@ -259,6 +280,171 @@ async function copyText(encoded){
   }catch{
     statusEl.textContent = "Could not copy";
   }
+}
+
+function loadStoredSpanData(){
+  try{
+    const stored = localStorage.getItem("treeSurveySpanData");
+    if(!stored){
+      updateSpanDataStatus();
+      return;
+    }
+
+    const rows = JSON.parse(stored);
+    window.SPAN_DATA = Array.isArray(rows) ? rows : [];
+    updateSpanDataStatus();
+  }catch{
+    window.SPAN_DATA = [];
+    updateSpanDataStatus("Saved span data could not be read. Re-import the spreadsheet.");
+  }
+}
+
+function updateSpanDataStatus(message=""){
+  const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
+  spanDataStatus.textContent = message || (count
+    ? `${count} span records loaded privately on this device.`
+    : "No span spreadsheet imported on this device.");
+  spanSearchStatus.textContent = count
+    ? "Search your imported LV/HV span data."
+    : "Import a spreadsheet before searching spans.";
+}
+
+async function importSpanFiles(){
+  const files = [...spanFileInput.files];
+
+  if(!files.length){
+    updateSpanDataStatus("Choose one or more CSV/XLSX files first.");
+    return;
+  }
+
+  try{
+    const imported = [];
+
+    for(const file of files){
+      const rows = await readSpanFile(file);
+      imported.push(...rows.map(normaliseImportedSpan).filter(Boolean));
+    }
+
+    if(!imported.length){
+      updateSpanDataStatus("No usable span rows found in those files.");
+      return;
+    }
+
+    window.SPAN_DATA = imported;
+    localStorage.setItem("treeSurveySpanData", JSON.stringify(imported));
+    currentSpanMatches = [];
+    spanSearchResults.innerHTML = "";
+    updateSpanDataStatus(`${imported.length} span records imported and saved on this device.`);
+  }catch(error){
+    updateSpanDataStatus(error.message || "Could not import that spreadsheet.");
+  }
+}
+
+function clearSpanData(){
+  localStorage.removeItem("treeSurveySpanData");
+  window.SPAN_DATA = [];
+  currentSpanMatches = [];
+  spanSearchResults.innerHTML = "";
+  updateSpanDataStatus("Span data cleared from this device.");
+}
+
+async function readSpanFile(file){
+  const extension = file.name.split(".").pop().toLowerCase();
+
+  if(extension === "csv"){
+    return parseCsvRows(await file.text());
+  }
+
+  if(extension === "xlsx" || extension === "xls"){
+    if(!window.XLSX) throw new Error("Spreadsheet reader is still loading. Try again in a few seconds.");
+
+    const data = await file.arrayBuffer();
+    const workbook = XLSX.read(data, { type:"array" });
+    return workbook.SheetNames.flatMap((sheetName) => {
+      const sheet = workbook.Sheets[sheetName];
+      return XLSX.utils.sheet_to_json(sheet, { defval:"" });
+    });
+  }
+
+  throw new Error("Use a CSV, XLSX, or XLS file.");
+}
+
+function parseCsvRows(text){
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+
+  for(let i = 0; i < text.length; i++){
+    const char = text[i];
+    const next = text[i + 1];
+
+    if(quoted){
+      if(char === '"' && next === '"'){
+        field += '"';
+        i++;
+      }else if(char === '"'){
+        quoted = false;
+      }else{
+        field += char;
+      }
+    }else if(char === '"'){
+      quoted = true;
+    }else if(char === ","){
+      row.push(field);
+      field = "";
+    }else if(char === "\n"){
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    }else if(char !== "\r"){
+      field += char;
+    }
+  }
+
+  if(field || row.length){
+    row.push(field);
+    rows.push(row);
+  }
+
+  const headers = (rows.shift() || []).map((header) => String(header).trim());
+  return rows
+    .filter((values) => values.some((value) => String(value).trim()))
+    .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+}
+
+function normaliseImportedSpan(row){
+  const span = {
+    primaryNo:getRowValue(row, ["Primary No", "PrimaryNo", "primaryNo"]),
+    primaryName:getRowValue(row, ["Primary Name", "PrimaryName", "primaryName"]),
+    hvFeeder:getRowValue(row, ["HV Feeder", "HVFeeder", "hvFeeder"]),
+    feederName:getRowValue(row, ["Feeder Name", "FeederName", "feederName"]),
+    distNo:getRowValue(row, ["Dist No", "DistNo", "distNo"]),
+    circuitName:getRowValue(row, ["circuitName", "Circuit Name", "CircuitName"]),
+    voltage:getRowValue(row, ["V", "Voltage", "voltage"]),
+    span:getRowValue(row, ["Span", "span", "spanId"]),
+    toPole:getRowValue(row, ["ToPole", "To Pole", "toPole"]),
+    externalReference:getRowValue(row, ["ExternalReference", "External Reference", "externalReference"]),
+    gridRef:getRowValue(row, ["Grid Ref", "GridRef", "gridRef"]),
+    latitude:Number(getRowValue(row, ["latitude", "Latitude", "lat"])),
+    longitude:Number(getRowValue(row, ["longitude", "Longitude", "lon", "lng"]))
+  };
+
+  if(!span.span && !span.toPole && !span.gridRef) return null;
+  if(!Number.isFinite(span.latitude) || !Number.isFinite(span.longitude)) return null;
+  return span;
+}
+
+function getRowValue(row, names){
+  const keys = Object.keys(row);
+  const wanted = names.map((name) => normaliseHeader(name));
+  const match = keys.find((key) => wanted.includes(normaliseHeader(key)));
+  return match ? String(row[match]).trim() : "";
+}
+
+function normaliseHeader(value){
+  return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function updateW3W(){
@@ -525,7 +711,7 @@ function findNearestSpan(lat, lon){
 
 function renderSpanCard(span, title="Nearest span from your data"){
   if(!span){
-    return card("span","Nearest span","No span data loaded","Add span-data-current.js beside this page to enable span autofill.");
+    return card("span","Nearest span","No span data loaded","Import a span spreadsheet to enable span autofill.");
   }
   const detail = Number.isFinite(span.distanceM) && span.distanceM > 0
     ? `${span.distanceM} m away`
