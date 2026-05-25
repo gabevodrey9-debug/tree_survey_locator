@@ -203,6 +203,7 @@ const spanSearchInput = document.getElementById("spanSearchInput");
 const spanSearchStatus = document.getElementById("spanSearchStatus");
 const spanSearchResults = document.getElementById("spanSearchResults");
 let currentReport = null;
+let currentSpanMatches = [];
 
 locateBtn.addEventListener("click", locate);
 
@@ -271,9 +272,11 @@ function searchSpan(event){
   }
 
   const matches = findSpanMatches(query, 5);
+  currentSpanMatches = matches;
 
   if(!matches.length){
     spanSearchStatus.textContent = `No matches found for "${query}".`;
+    currentSpanMatches = [];
     spanSearchResults.innerHTML = "";
     return;
   }
@@ -382,9 +385,39 @@ function renderSpanSearchResult(span, index){
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([copyButton("Copy span info", spanCopyText(span))])}
+      ${actions([`<button class="small primary" type="button" onclick="useSpanFromSearch(${index})">Use this span</button>`, copyButton("Copy span info", spanCopyText(span))])}
     </article>
   `;
+}
+
+function useSpanFromSearch(index){
+  const span = currentSpanMatches[index];
+  if(!span) return;
+  fillFromSpanRecord(span);
+}
+
+function fillFromSpanRecord(span){
+  if(!Number.isFinite(span.latitude) || !Number.isFinite(span.longitude)){
+    spanSearchStatus.textContent = "That span has no latitude/longitude in the spreadsheet.";
+    return;
+  }
+
+  const selectedSpan = { ...span, distanceM: 0 };
+  const gridRef = span.gridRef ? formatSpreadsheetGridRef(span.gridRef) : latLonToOSGrid(span.latitude, span.longitude);
+
+  renderLocationCards({
+    lat: span.latitude,
+    lon: span.longitude,
+    accuracy: "",
+    gridRef,
+    gridDetail: span.gridRef ? `Spreadsheet grid ref: ${span.gridRef}` : "Grid reference calculated from spreadsheet coordinates.",
+    nearestSpan: selectedSpan,
+    spanTitle: "Selected span from search",
+    sourceNote: "Filled from your uploaded span spreadsheet."
+  });
+
+  spanSearchStatus.textContent = `Filled from ${span.voltage || "span"} ${span.span || ""}.`;
+  resultsEl.scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
 function locate(){
@@ -407,29 +440,55 @@ async function showLocation(pos){
   const lat = pos.coords.latitude;
   const lon = pos.coords.longitude;
   const accuracy = Math.round(pos.coords.accuracy);
-  const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
   const gridRef = latLonToOSGrid(lat, lon);
+  const nearestSpan = findNearestSpan(lat, lon);
+
+  renderLocationCards({
+    lat,
+    lon,
+    accuracy,
+    gridRef,
+    gridDetail:"Give this to the team or write it on the survey record.",
+    nearestSpan,
+    spanTitle:"Nearest span from your data",
+    sourceNote:"Filled from device GPS."
+  });
+
+  setBusy(false,"Ready");
+  findFreeAE(lat, lon);
+}
+
+function renderLocationCards(options){
+  const lat = options.lat;
+  const lon = options.lon;
+  const accuracy = options.accuracy;
+  const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
   const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("nearest A&E hospital near " + lat + "," + lon)}`;
   const nhsFinder = "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/";
   const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent("nearest A&E hospital")}`;
   const w3wUrl = "https://what3words.com/";
-  const nearestSpan = findNearestSpan(lat, lon);
 
-  currentReport = { gridRef, coords, accuracy, w3w:"", nearestSpan };
+  currentReport = {
+    gridRef: options.gridRef,
+    coords,
+    accuracy,
+    w3w:"",
+    nearestSpan: options.nearestSpan
+  };
 
   resultsEl.innerHTML = [
     card(
       "grid-ref",
-      "Six digit grid reference",
-      gridRef,
-      "Give this to the team or write it on the survey record.",
-      actions([copyButton("Copy grid ref", gridRef)])
+      "Grid reference",
+      options.gridRef,
+      options.gridDetail || "",
+      actions([copyButton("Copy grid ref", options.gridRef)])
     ),
     card(
       "coords",
       "GPS coordinates",
       coords,
-      `Accuracy about ${accuracy} m.`,
+      accuracy === "" ? (options.sourceNote || "") : `Accuracy about ${accuracy} m.`,
       actions([copyButton("Copy GPS", coords), linkButton("Open position", `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`)])
     ),
     `
@@ -443,7 +502,7 @@ async function showLocation(pos){
         ${actions([linkButton("Open what3words", w3wUrl, true), copyButton("Copy GPS for w3w", coords)])}
       </article>
     `,
-    renderSpanCard(nearestSpan),
+    renderSpanCard(options.nearestSpan, options.spanTitle),
     card(
       "ae",
       "Nearest A&E",
@@ -452,9 +511,6 @@ async function showLocation(pos){
       actions([linkButton("Google Maps A&E", mapsSearch, true), linkButton("NHS finder", nhsFinder), linkButton("Directions", directions)])
     )
   ].join("");
-
-  setBusy(false,"Ready");
-  findFreeAE(lat, lon);
 }
 
 function findNearestSpan(lat, lon){
@@ -468,14 +524,14 @@ function findNearestSpan(lat, lon){
     .sort((a, b) => a.distanceM - b.distanceM)[0] || null;
 }
 
-function renderSpanCard(span){
+function renderSpanCard(span, title="Nearest span from your data"){
   if(!span){
     return card("span","Nearest span","No span data loaded","Add span-data-current.js beside this page to enable span autofill.");
   }
 
   return `
     <article class="card" id="span">
-      <h2>Nearest span from your data</h2>
+      <h2>${escapeHtml(title)}</h2>
       <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
       <div class="detail">${escapeHtml(`${span.distanceM} m away | ${span.gridRef || "No grid ref"}`)}</div>
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
@@ -502,6 +558,13 @@ function spanCopyText(span){
   ].join("\n");
 }
 
+function formatSpreadsheetGridRef(gridRef){
+  const compact = compactSearchText(gridRef);
+  const match = compact.match(/^([a-z]{2})(\d{3})\d{0,3}(\d{3})\d{0,3}$/i);
+  if(!match) return String(gridRef);
+  return `${match[1].toUpperCase()} ${match[2]} ${match[3]}`;
+}
+
 function showError(err){
   setBusy(false,"Tap to locate");
   resultsEl.innerHTML = card(
@@ -518,36 +581,79 @@ async function findFreeAE(lat, lon){
   const aeCard = document.getElementById("ae");
   if(!aeCard) return;
 
-  const query = `
-    [out:json][timeout:6];
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter"
+  ];
+  const radiuses = [30000, 60000, 100000];
+
+  aeCard.querySelector(".detail").textContent = "Checking public map data. Use the buttons if you need it immediately.";
+
+  for(const radius of radiuses){
+    const query = buildAEQuery(lat, lon, radius);
+
+    try{
+      const responses = await Promise.allSettled(
+        endpoints.map((endpoint) => fetchWithTimeout(endpoint, query, 9000))
+      );
+      const elements = responses
+        .filter((result) => result.status === "fulfilled")
+        .flatMap((result) => result.value.elements || []);
+      const best = bestAEFromElements(elements, lat, lon);
+
+      if(best){
+        renderFoundAE(aeCard, best, lat, lon);
+        return;
+      }
+    }catch{
+      // Try the next radius before giving up.
+    }
+  }
+
+  aeCard.querySelector(".detail").textContent = "No A&E found in public map data. Use Google Maps or NHS finder.";
+}
+
+function buildAEQuery(lat, lon, radius){
+  return `
+    [out:json][timeout:8];
     (
-      nwr["amenity"="hospital"]["emergency"="yes"](around:35000,${lat},${lon});
-      nwr["amenity"="hospital"]["emergency"="designated"](around:35000,${lat},${lon});
-      nwr["emergency"="emergency_ward_entrance"](around:35000,${lat},${lon});
-      nwr["amenity"="hospital"]["name"~"A&E|Accident|Emergency",i](around:35000,${lat},${lon});
+      nwr["amenity"="hospital"]["emergency"~"^(yes|designated)$"](around:${radius},${lat},${lon});
+      nwr["healthcare"="hospital"]["emergency"~"^(yes|designated)$"](around:${radius},${lat},${lon});
+      nwr["healthcare"="emergency_ward"](around:${radius},${lat},${lon});
+      nwr["emergency"="emergency_ward_entrance"](around:${radius},${lat},${lon});
+      nwr["amenity"="hospital"]["name"~"A&E|A & E|Accident|Emergency|Casualty",i](around:${radius},${lat},${lon});
+      nwr["healthcare"="hospital"]["name"~"A&E|A & E|Accident|Emergency|Casualty",i](around:${radius},${lat},${lon});
     );
     out center tags;
   `;
+}
 
-  try{
-    const data = await fetchWithTimeout("https://overpass-api.de/api/interpreter", query, 8000);
-    const best = (data.elements || [])
-      .map(el => normaliseAE(el, lat, lon))
-      .filter(Boolean)
-      .sort((a,b) => a.distanceKm - b.distanceKm)[0];
+function bestAEFromElements(elements, lat, lon){
+  const seen = new Set();
 
-    if(best){
-      const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(best.name + " " + best.address)}`;
-      aeCard.innerHTML = `
-        <h2>Nearest A&E from free map data</h2>
-        <div class="value">${escapeHtml(best.name)}</div>
-        <div class="detail">${escapeHtml(`${best.address} | ${best.phone} | ${best.distanceKm.toFixed(1)} km away`)}</div>
-        ${actions([linkButton("Open in Maps", maps, true), linkButton("NHS finder", "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/")])}
-      `;
-    }
-  }catch{
-    aeCard.querySelector(".detail").textContent = "Free map lookup timed out. Use Google Maps or NHS finder.";
-  }
+  return elements
+    .map((el) => normaliseAE(el, lat, lon))
+    .filter(Boolean)
+    .filter((ae) => {
+      const key = `${ae.name.toLowerCase()}|${ae.lat.toFixed(3)}|${ae.lon.toFixed(3)}`;
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => a.distanceKm - b.distanceKm || b.quality - a.quality)[0] || null;
+}
+
+function renderFoundAE(aeCard, ae, lat, lon){
+  const mapsQuery = ae.address === "Address not listed" ? `${ae.name} near ${lat},${lon}` : `${ae.name} ${ae.address}`;
+  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
+  const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent(mapsQuery)}`;
+
+  aeCard.innerHTML = `
+    <h2>Nearest A&E from public map data</h2>
+    <div class="value">${escapeHtml(ae.name)}</div>
+    <div class="detail">${escapeHtml(`${ae.address} | ${ae.phone} | ${ae.distanceKm.toFixed(1)} km away`)}</div>
+    ${actions([linkButton("Open in Maps", maps, true), linkButton("Directions", directions), linkButton("NHS finder", "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/")])}
+  `;
 }
 
 async function fetchWithTimeout(endpoint, query, ms){
@@ -575,18 +681,35 @@ function normaliseAE(el, lat, lon){
 
   const tags = el.tags;
   const address = [
+    tags["addr:full"],
     tags["addr:housename"],
     tags["addr:housenumber"],
     tags["addr:street"],
     tags["addr:city"],
     tags["addr:postcode"]
   ].filter(Boolean).join(", ");
+  const name = tags.name || tags.operator || tags.brand || "Unnamed A&E";
+  const emergency = String(tags.emergency || "").toLowerCase();
+  const healthcare = String(tags.healthcare || "").toLowerCase();
+  const amenity = String(tags.amenity || "").toLowerCase();
+  const nameLooksEmergency = /a&e|a & e|accident|emergency|casualty/i.test(name);
+  let quality = 0;
+
+  if(amenity === "hospital" || healthcare === "hospital") quality += 80;
+  if(emergency === "yes" || emergency === "designated") quality += 70;
+  if(healthcare === "emergency_ward" || emergency === "emergency_ward_entrance") quality += 55;
+  if(nameLooksEmergency) quality += 35;
+  if(address) quality += 8;
+  if(tags.phone || tags["contact:phone"]) quality += 8;
 
   return {
-    name:tags.name || tags.operator || "Unnamed A&E",
+    name,
     address:address || "Address not listed",
     phone:tags.phone || tags["contact:phone"] || "Phone not listed",
-    distanceKm:haversineKm(lat, lon, placeLat, placeLon)
+    distanceKm:haversineKm(lat, lon, placeLat, placeLon),
+    lat:placeLat,
+    lon:placeLon,
+    quality
   };
 }
 
