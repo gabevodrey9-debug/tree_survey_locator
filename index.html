@@ -865,9 +865,22 @@ function initW3WMap(lat, lon, gridRef, attempts=0){
     attributionControl:true
   }).setView([lat, lon], 17);
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom:19,
     attribution:"&copy; OpenStreetMap"
+  });
+
+  const satelliteLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom:19,
+    attribution:"Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  }).addTo(w3wMap);
+
+  L.control.layers({
+    "Satellite": satelliteLayer,
+    "Street map": streetLayer
+  }, null, {
+    collapsed:false,
+    position:"topright"
   }).addTo(w3wMap);
 
   w3wMarker = L.marker([lat, lon], {
