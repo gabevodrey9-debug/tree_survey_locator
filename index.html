@@ -262,9 +262,11 @@ let w3wMap = null;
 let w3wMarker = null;
 let w3wMarkerPosition = null;
 window.SPAN_DATA = [];
+window.AE_DATA = [];
 
 locateBtn.addEventListener("click", locate);
 loadStoredSpanData();
+loadBundledAEData();
 
 function setBusy(isBusy, text){
   locateBtn.disabled = isBusy;
@@ -301,7 +303,8 @@ function linkButton(label, href, primary=false){
 }
 
 function copyButton(label, value){
-  return `<button class="small" type="button" onclick="copyText('${encodeURIComponent(value)}')">${escapeHtml(label)}</button>`;
+  const encodedValue = encodeURIComponent(value).replaceAll("'","%27");
+  return `<button class="small" type="button" onclick="copyText('${encodedValue}')">${escapeHtml(label)}</button>`;
 }
 
 async function copyText(encoded){
@@ -378,6 +381,32 @@ function clearSpanData(){
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
   updateSpanDataStatus("Span data cleared from this device.");
+}
+
+async function loadBundledAEData(){
+  try{
+    const response = await fetch("ae-data.csv", { cache:"no-store" });
+    if(!response.ok) return;
+
+    const rows = parseCsvRows(await response.text());
+    window.AE_DATA = rows.map(normaliseAERow).filter(Boolean);
+  }catch{
+    window.AE_DATA = [];
+  }
+}
+
+function normaliseAERow(row){
+  const hospital = {
+    name:getRowValue(row, ["Name", "Hospital", "Hospital Name", "A&E Name", "AE Name"]),
+    address:getRowValue(row, ["Address", "Full Address"]),
+    phone:getRowValue(row, ["Phone", "Telephone", "Telephone Number"]),
+    mapsLink:getRowValue(row, ["Maps Link", "Google Maps", "Map Link"]),
+    latitude:Number(getRowValue(row, ["Latitude", "Lat", "latitude", "lat"])),
+    longitude:Number(getRowValue(row, ["Longitude", "Lon", "Lng", "longitude", "lon", "lng"]))
+  };
+
+  if(!hospital.name || !Number.isFinite(hospital.latitude) || !Number.isFinite(hospital.longitude)) return null;
+  return hospital;
 }
 
 async function readSpanFile(file){
@@ -737,7 +766,6 @@ function fillFromSpanRecord(span){
 
   spanSearchStatus.textContent = `Filled from ${span.voltage || "span"} ${span.span || ""}.`;
   resultsEl.scrollIntoView({ behavior:"smooth", block:"start" });
-  findFreeAE(span.latitude, span.longitude);
 }
 
 function locate(){
@@ -829,9 +857,6 @@ function renderLocationCards(options){
   const lon = options.lon;
   const accuracy = options.accuracy;
   const coords = `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-  const mapsSearch = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent("nearest A&E hospital near " + lat + "," + lon)}`;
-  const nhsFinder = "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/";
-  const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent("nearest A&E hospital")}`;
 
   currentReport = {
     lat,
@@ -853,13 +878,7 @@ function renderLocationCards(options){
       actions([copyButton("Copy grid ref", options.gridRef)])
     ),
     renderW3WCard(lat, lon, options.gridRef),
-    card(
-      "ae",
-      "Nearest A&E",
-      "Open a live finder",
-      "Free mode does not wait for slow databases. These buttons use your location immediately.",
-      actions([linkButton("Google Maps A&E", mapsSearch, true), linkButton("NHS finder", nhsFinder), linkButton("Directions", directions)])
-    ),
+    renderAECard(lat, lon),
     renderMightyFieldsCards(options.nearestSpan, options.gridRef)
   ].join("");
 
@@ -893,6 +912,45 @@ function renderW3WCard(lat, lon, gridRef){
       ])}
     </article>
   `;
+}
+
+function renderAECard(lat, lon){
+  const ae = findNearestAE(lat, lon);
+  if(!ae) return "";
+
+  const mapsQuery = ae.mapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${ae.name} ${ae.address}`.trim())}`;
+  const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent(`${ae.name} ${ae.address}`.trim())}`;
+  const paperworkText = [
+    ae.name,
+    ae.address || "Address not listed",
+    ae.phone || "Phone not listed"
+  ].join("\n");
+
+  return `
+    <article class="card" id="ae">
+      <h2>Nearest A&amp;E</h2>
+      <div class="value">${escapeHtml(ae.name)}</div>
+      <div class="detail">${escapeHtml(`${ae.address || "Address not listed"} | ${ae.phone || "Phone not listed"}`)}</div>
+      <div class="asset-line"><strong>Distance:</strong> ${escapeHtml(`${ae.distanceKm.toFixed(1)} km away - app reference only`)}</div>
+      ${actions([
+        copyButton("Copy A&E details", paperworkText),
+        linkButton("Open in Maps", mapsQuery, true),
+        linkButton("Directions", directions),
+        ae.phone ? linkButton("Call", `tel:${ae.phone.replace(/[^\d+]/g, "")}`) : ""
+      ].filter(Boolean))}
+    </article>
+  `;
+}
+
+function findNearestAE(lat, lon){
+  const hospitals = Array.isArray(window.AE_DATA) ? window.AE_DATA : [];
+  return hospitals
+    .filter((hospital) => Number.isFinite(hospital.latitude) && Number.isFinite(hospital.longitude))
+    .map((hospital) => ({
+      ...hospital,
+      distanceKm:haversineKm(lat, lon, hospital.latitude, hospital.longitude)
+    }))
+    .sort((a, b) => a.distanceKm - b.distanceKm)[0] || null;
 }
 
 function initW3WMap(lat, lon, gridRef, attempts=0){
@@ -1077,142 +1135,6 @@ function showError(err){
     "",
     "danger"
   );
-}
-
-async function findFreeAE(lat, lon){
-  const aeCard = document.getElementById("ae");
-  if(!aeCard) return;
-
-  const endpoints = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter"
-  ];
-  const radiuses = [30000, 60000, 100000];
-
-  aeCard.querySelector(".detail").textContent = "Checking public map data. Use the buttons if you need it immediately.";
-
-  for(const radius of radiuses){
-    const query = buildAEQuery(lat, lon, radius);
-
-    try{
-      const responses = await Promise.allSettled(
-        endpoints.map((endpoint) => fetchWithTimeout(endpoint, query, 9000))
-      );
-      const elements = responses
-        .filter((result) => result.status === "fulfilled")
-        .flatMap((result) => result.value.elements || []);
-      const best = bestAEFromElements(elements, lat, lon);
-
-      if(best){
-        renderFoundAE(aeCard, best, lat, lon);
-        return;
-      }
-    }catch{
-      // Try the next radius before giving up.
-    }
-  }
-
-  aeCard.querySelector(".detail").textContent = "No A&E found in public map data. Use Google Maps or NHS finder.";
-}
-
-function buildAEQuery(lat, lon, radius){
-  return `
-    [out:json][timeout:8];
-    (
-      nwr["amenity"="hospital"]["emergency"~"^(yes|designated)$"](around:${radius},${lat},${lon});
-      nwr["healthcare"="hospital"]["emergency"~"^(yes|designated)$"](around:${radius},${lat},${lon});
-      nwr["healthcare"="emergency_ward"](around:${radius},${lat},${lon});
-      nwr["emergency"="emergency_ward_entrance"](around:${radius},${lat},${lon});
-      nwr["amenity"="hospital"]["name"~"A&E|A & E|Accident|Emergency|Casualty",i](around:${radius},${lat},${lon});
-      nwr["healthcare"="hospital"]["name"~"A&E|A & E|Accident|Emergency|Casualty",i](around:${radius},${lat},${lon});
-    );
-    out center tags;
-  `;
-}
-
-function bestAEFromElements(elements, lat, lon){
-  const seen = new Set();
-
-  return elements
-    .map((el) => normaliseAE(el, lat, lon))
-    .filter(Boolean)
-    .filter((ae) => {
-      const key = `${ae.name.toLowerCase()}|${ae.lat.toFixed(3)}|${ae.lon.toFixed(3)}`;
-      if(seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) => a.distanceKm - b.distanceKm || b.quality - a.quality)[0] || null;
-}
-
-function renderFoundAE(aeCard, ae, lat, lon){
-  const mapsQuery = ae.address === "Address not listed" ? `${ae.name} near ${lat},${lon}` : `${ae.name} ${ae.address}`;
-  const maps = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`;
-  const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent(mapsQuery)}`;
-
-  aeCard.innerHTML = `
-    <h2>Nearest A&E from public map data</h2>
-    <div class="value">${escapeHtml(ae.name)}</div>
-    <div class="detail">${escapeHtml(`${ae.address} | ${ae.phone} | ${ae.distanceKm.toFixed(1)} km away`)}</div>
-    ${actions([linkButton("Open in Maps", maps, true), linkButton("Directions", directions), linkButton("NHS finder", "https://www.nhs.uk/nhs-services/urgent-and-emergency-care-services/find-urgent-and-emergency-care-services/")])}
-  `;
-}
-
-async function fetchWithTimeout(endpoint, query, ms){
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ms);
-
-  try{
-    const response = await fetch(endpoint, {
-      method:"POST",
-      body:"data=" + encodeURIComponent(query),
-      headers:{ "Content-Type":"application/x-www-form-urlencoded;charset=UTF-8" },
-      signal:controller.signal
-    });
-    if(!response.ok) throw new Error("Map lookup failed");
-    return await response.json();
-  }finally{
-    clearTimeout(timeout);
-  }
-}
-
-function normaliseAE(el, lat, lon){
-  const placeLat = el.lat || el.center?.lat;
-  const placeLon = el.lon || el.center?.lon;
-  if(!placeLat || !placeLon || !el.tags) return null;
-
-  const tags = el.tags;
-  const address = [
-    tags["addr:full"],
-    tags["addr:housename"],
-    tags["addr:housenumber"],
-    tags["addr:street"],
-    tags["addr:city"],
-    tags["addr:postcode"]
-  ].filter(Boolean).join(", ");
-  const name = tags.name || tags.operator || tags.brand || "Unnamed A&E";
-  const emergency = String(tags.emergency || "").toLowerCase();
-  const healthcare = String(tags.healthcare || "").toLowerCase();
-  const amenity = String(tags.amenity || "").toLowerCase();
-  const nameLooksEmergency = /a&e|a & e|accident|emergency|casualty/i.test(name);
-  let quality = 0;
-
-  if(amenity === "hospital" || healthcare === "hospital") quality += 80;
-  if(emergency === "yes" || emergency === "designated") quality += 70;
-  if(healthcare === "emergency_ward" || emergency === "emergency_ward_entrance") quality += 55;
-  if(nameLooksEmergency) quality += 35;
-  if(address) quality += 8;
-  if(tags.phone || tags["contact:phone"]) quality += 8;
-
-  return {
-    name,
-    address:address || "Address not listed",
-    phone:tags.phone || tags["contact:phone"] || "Phone not listed",
-    distanceKm:haversineKm(lat, lon, placeLat, placeLon),
-    lat:placeLat,
-    lon:placeLon,
-    quality
-  };
 }
 
 function haversineKm(lat1, lon1, lat2, lon2){
