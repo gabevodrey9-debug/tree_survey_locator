@@ -257,6 +257,7 @@ const spanSearchStatus = document.getElementById("spanSearchStatus");
 const spanSearchResults = document.getElementById("spanSearchResults");
 let currentReport = null;
 let currentSpanMatches = [];
+let currentLocateMatches = [];
 let w3wMap = null;
 let w3wMarker = null;
 let w3wMarkerPosition = null;
@@ -708,13 +709,19 @@ function useSpanFromSearch(index){
   fillFromSpanRecord(span);
 }
 
+function useSpanFromLocate(index){
+  const span = currentLocateMatches[index];
+  if(!span) return;
+  fillFromSpanRecord(span);
+}
+
 function fillFromSpanRecord(span){
   if(!Number.isFinite(span.latitude) || !Number.isFinite(span.longitude)){
     spanSearchStatus.textContent = "That span has no latitude/longitude in the spreadsheet.";
     return;
   }
 
-  const selectedSpan = { ...span, distanceM: 0 };
+  const selectedSpan = { ...span };
   const gridRef = span.gridRef ? formatSpreadsheetGridRef(span.gridRef) : latLonToOSGrid(span.latitude, span.longitude);
 
   renderLocationCards({
@@ -724,12 +731,13 @@ function fillFromSpanRecord(span){
     gridRef,
     gridDetail: "Six-figure grid reference from the selected span.",
     nearestSpan: selectedSpan,
-    spanTitle: "Selected span from search",
+    spanTitle: Number.isFinite(span.distanceM) && span.distanceM > 0 ? "Selected nearby span" : "Selected span from search",
     sourceNote: "Filled from your uploaded span spreadsheet."
   });
 
   spanSearchStatus.textContent = `Filled from ${span.voltage || "span"} ${span.span || ""}.`;
   resultsEl.scrollIntoView({ behavior:"smooth", block:"start" });
+  findFreeAE(span.latitude, span.longitude);
 }
 
 function locate(){
@@ -752,22 +760,68 @@ async function showLocation(pos){
   const lat = pos.coords.latitude;
   const lon = pos.coords.longitude;
   const accuracy = Math.round(pos.coords.accuracy);
-  const gridRef = latLonToOSGrid(lat, lon);
-  const nearestSpan = findNearestSpan(lat, lon);
+  const nearestSpans = findNearestSpans(lat, lon, 5);
+  currentLocateMatches = nearestSpans;
 
-  renderLocationCards({
-    lat,
-    lon,
-    accuracy,
-    gridRef,
-    gridDetail:"Give this to the team or write it on the survey record.",
-    nearestSpan,
-    spanTitle:"Nearest span from your data",
-    sourceNote:"Filled from device GPS."
-  });
+  setBusy(false, nearestSpans.length ? "Choose span" : "No span data");
+  renderNearestSpanChoices(nearestSpans, accuracy);
+}
 
-  setBusy(false,"Ready");
-  findFreeAE(lat, lon);
+function renderNearestSpanChoices(spans, accuracy){
+  if(!Array.isArray(window.SPAN_DATA) || !window.SPAN_DATA.length){
+    resultsEl.innerHTML = card(
+      "nearest-spans",
+      "Nearest spans",
+      "No span data imported",
+      "Import your span spreadsheet, then press locate again."
+    );
+    return;
+  }
+
+  if(!spans.length){
+    resultsEl.innerHTML = card(
+      "nearest-spans",
+      "Nearest spans",
+      "No nearby spans found",
+      "The imported rows need latitude and longitude before locate can rank them."
+    );
+    return;
+  }
+
+  resultsEl.innerHTML = `
+    <article class="card" id="nearest-spans">
+      <h2>Nearest spans</h2>
+      <div class="value">Choose the span</div>
+      <div class="detail">Device accuracy about ${escapeHtml(accuracy || "unknown")} m. The w3w marker will start from the span you choose.</div>
+    </article>
+    <section class="match-list">
+      ${spans.map((span, index) => renderNearestSpanChoice(span, index)).join("")}
+    </section>
+  `;
+}
+
+function renderNearestSpanChoice(span, index){
+  const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
+  const mainValue = isLv && span.toPole
+    ? `LV To Pole ${span.toPole}`
+    : `${span.voltage || "Unknown"} ${span.span || "Unknown span"}`;
+  const detailParts = [
+    Number.isFinite(span.distanceM) ? `${span.distanceM} m away` : "",
+    isLv ? `${span.voltage || "LV"} span ${span.span || "Unknown span"}` : ""
+  ].filter(Boolean);
+
+  return `
+    <article class="card" id="nearest-span-${index}">
+      <h2>${index + 1} nearest</h2>
+      <div class="value">${escapeHtml(mainValue)}</div>
+      ${detailParts.length ? `<div class="detail">${escapeHtml(detailParts.join(" - "))}</div>` : ""}
+      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(primarySubValue(span) || "Not listed")}</div>
+      <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
+      <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
+      <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
+      ${actions([`<button class="small primary" type="button" onclick="useSpanFromLocate(${index})">Use this span</button>`, copyButton("Copy span info", spanCopyText(span))])}
+    </article>
+  `;
 }
 
 function renderLocationCards(options){
@@ -810,6 +864,9 @@ function renderLocationCards(options){
   ].join("");
 
   initW3WMap(lat, lon, options.gridRef);
+  if(getW3WKey()){
+    setTimeout(convertMarkerToW3W, 700);
+  }
 }
 
 function renderW3WCard(lat, lon, gridRef){
@@ -913,7 +970,7 @@ function setW3WMarker(lat, lng, pan=false){
   if(w3wMap && pan) w3wMap.setView([lat, lng], w3wMap.getZoom());
 }
 
-function findNearestSpan(lat, lon){
+function findNearestSpans(lat, lon, limit=5){
   const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
   return spans
     .filter((span) => Number.isFinite(span.latitude) && Number.isFinite(span.longitude))
@@ -921,7 +978,8 @@ function findNearestSpan(lat, lon){
       ...span,
       distanceM: Math.round(haversineKm(lat, lon, span.latitude, span.longitude) * 1000)
     }))
-    .sort((a, b) => a.distanceM - b.distanceM)[0] || null;
+    .sort((a, b) => a.distanceM - b.distanceM)
+    .slice(0, limit);
 }
 
 function renderSpanCard(span, title="Nearest span from your data"){
