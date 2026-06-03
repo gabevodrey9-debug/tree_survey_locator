@@ -326,7 +326,7 @@ function loadStoredSpanData(){
     }
 
     const rows = JSON.parse(stored);
-    window.SPAN_DATA = Array.isArray(rows) ? rows : [];
+    window.SPAN_DATA = Array.isArray(rows) ? rows.map(repairSpanPosition).filter((span) => isUsableCoordinate(span.latitude, span.longitude)) : [];
     updateSpanDataStatus();
   }catch{
     window.SPAN_DATA = [];
@@ -401,11 +401,11 @@ function normaliseAERow(row){
     address:getRowValue(row, ["Address", "Full Address"]),
     phone:getRowValue(row, ["Phone", "Telephone", "Telephone Number"]),
     mapsLink:getRowValue(row, ["Maps Link", "Google Maps", "Map Link"]),
-    latitude:Number(getRowValue(row, ["Latitude", "Lat", "latitude", "lat"])),
-    longitude:Number(getRowValue(row, ["Longitude", "Lon", "Lng", "longitude", "lon", "lng"]))
+    latitude:parseCoordinateNumber(getRowValue(row, ["Latitude", "Lat", "latitude", "lat"])),
+    longitude:parseCoordinateNumber(getRowValue(row, ["Longitude", "Lon", "Lng", "longitude", "lon", "lng"]))
   };
 
-  if(!hospital.name || !Number.isFinite(hospital.latitude) || !Number.isFinite(hospital.longitude)) return null;
+  if(!hospital.name || !isUsableCoordinate(hospital.latitude, hospital.longitude)) return null;
   return hospital;
 }
 
@@ -488,13 +488,14 @@ function normaliseImportedSpan(row){
     toPole:getRowValue(row, ["ToPole", "To Pole", "toPole"]),
     externalReference:getRowValue(row, ["ExternalReference", "External Reference", "externalReference"]),
     gridRef:getRowValue(row, ["Grid Ref", "GridRef", "gridRef"]),
-    latitude:Number(getRowValue(row, ["latitude", "Latitude", "lat"])),
-    longitude:Number(getRowValue(row, ["longitude", "Longitude", "lon", "lng"]))
+    latitude:parseCoordinateNumber(getRowValue(row, ["latitude", "Latitude", "lat"])),
+    longitude:parseCoordinateNumber(getRowValue(row, ["longitude", "Longitude", "lon", "lng"]))
   };
 
   if(!span.span && !span.toPole && !span.gridRef) return null;
-  if(!Number.isFinite(span.latitude) || !Number.isFinite(span.longitude)) return null;
-  return span;
+  const repaired = repairSpanPosition(span);
+  if(!isUsableCoordinate(repaired.latitude, repaired.longitude)) return null;
+  return repaired;
 }
 
 function getRowValue(row, names){
@@ -745,17 +746,19 @@ function useSpanFromLocate(index){
 }
 
 function fillFromSpanRecord(span){
-  if(!Number.isFinite(span.latitude) || !Number.isFinite(span.longitude)){
-    spanSearchStatus.textContent = "That span has no latitude/longitude in the spreadsheet.";
+  const position = getSpanMapPosition(span);
+
+  if(!position){
+    spanSearchStatus.textContent = "That span has no usable map position. Add latitude/longitude or grid ref.";
     return;
   }
 
-  const selectedSpan = { ...span };
-  const gridRef = span.gridRef ? formatSpreadsheetGridRef(span.gridRef) : latLonToOSGrid(span.latitude, span.longitude);
+  const selectedSpan = { ...span, latitude:position.lat, longitude:position.lon };
+  const gridRef = span.gridRef ? formatSpreadsheetGridRef(span.gridRef) : latLonToOSGrid(position.lat, position.lon);
 
   renderLocationCards({
-    lat: span.latitude,
-    lon: span.longitude,
+    lat: position.lat,
+    lon: position.lon,
     accuracy: "",
     gridRef,
     gridDetail: "Six-figure grid reference from the selected span.",
@@ -1031,10 +1034,13 @@ function setW3WMarker(lat, lng, pan=false){
 function findNearestSpans(lat, lon, limit=5){
   const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
   return spans
-    .filter((span) => Number.isFinite(span.latitude) && Number.isFinite(span.longitude))
-    .map((span) => ({
-      ...span,
-      distanceM: Math.round(haversineKm(lat, lon, span.latitude, span.longitude) * 1000)
+    .map((span) => ({ span, position:getSpanMapPosition(span) }))
+    .filter((item) => item.position)
+    .map((item) => ({
+      ...item.span,
+      latitude:item.position.lat,
+      longitude:item.position.lon,
+      distanceM: Math.round(haversineKm(lat, lon, item.position.lat, item.position.lon) * 1000)
     }))
     .sort((a, b) => a.distanceM - b.distanceM)
     .slice(0, limit);
@@ -1125,6 +1131,72 @@ function formatSpreadsheetGridRef(gridRef){
   return `${match[1].toUpperCase()}${match[2]}${match[3]}`;
 }
 
+function parseCoordinateNumber(value){
+  const text = String(value ?? "").trim();
+  if(!text) return NaN;
+  const number = Number(text.replace(",", "."));
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function isUsableCoordinate(lat, lon){
+  return Number.isFinite(lat) &&
+    Number.isFinite(lon) &&
+    !(Math.abs(lat) < 0.0001 && Math.abs(lon) < 0.0001) &&
+    lat >= 49 &&
+    lat <= 61 &&
+    lon >= -9 &&
+    lon <= 2;
+}
+
+function repairSpanPosition(span){
+  if(!span) return span;
+  const latitude = parseCoordinateNumber(span.latitude);
+  const longitude = parseCoordinateNumber(span.longitude);
+  if(isUsableCoordinate(latitude, longitude)){
+    return { ...span, latitude, longitude, coordinateSource:span.coordinateSource || "latlon" };
+  }
+
+  const gridPosition = osGridRefToLatLon(span.gridRef);
+  if(gridPosition){
+    return { ...span, latitude:gridPosition.lat, longitude:gridPosition.lon, coordinateSource:"gridRef" };
+  }
+
+  return { ...span, latitude, longitude };
+}
+
+function getSpanMapPosition(span){
+  if(!span) return null;
+  if(isUsableCoordinate(span.latitude, span.longitude)){
+    return { lat:Number(span.latitude), lon:Number(span.longitude) };
+  }
+  return osGridRefToLatLon(span.gridRef);
+}
+
+function osGridRefToLatLon(gridRef){
+  const eastNorth = osGridRefToEastNorth(gridRef);
+  return eastNorth ? eastNorthToLatLon(eastNorth.easting, eastNorth.northing) : null;
+}
+
+function osGridRefToEastNorth(gridRef){
+  const compact = compactSearchText(gridRef).toUpperCase();
+  const match = compact.match(/^([A-Z]{2})(\d{3})\d{0,3}(\d{3})\d{0,3}$/);
+  if(!match) return null;
+
+  let l1 = match[1].charCodeAt(0) - 65;
+  let l2 = match[1].charCodeAt(1) - 65;
+  if(l1 > 7) l1--;
+  if(l2 > 7) l2--;
+
+  const e100k = ((l1 - 2) % 5) * 5 + (l2 % 5);
+  const n100k = (19 - Math.floor(l1 / 5) * 5) - Math.floor(l2 / 5);
+  if(e100k < 0 || e100k > 6 || n100k < 0 || n100k > 12) return null;
+
+  return {
+    easting:e100k * 100000 + Number(match[2]) * 100 + 50,
+    northing:n100k * 100000 + Number(match[3]) * 100 + 50
+  };
+}
+
 function showError(err){
   setBusy(false,"Tap to locate");
   resultsEl.innerHTML = card(
@@ -1146,6 +1218,100 @@ function haversineKm(lat1, lon1, lat2, lon2){
     Math.cos(lat2*Math.PI/180) *
     Math.sin(dLon/2)**2;
   return 2 * r * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function eastNorthToLatLon(easting, northing){
+  const deg = Math.PI / 180;
+  const a = 6377563.396;
+  const b = 6356256.909;
+  const f0 = 0.9996012717;
+  const lat0 = 49 * deg;
+  const lon0 = -2 * deg;
+  const n0 = -100000;
+  const e0 = 400000;
+  const e2 = 1 - (b*b)/(a*a);
+  const n = (a-b)/(a+b);
+
+  let lat = lat0;
+  let meridionalArc = 0;
+
+  do{
+    lat = (northing - n0 - meridionalArc) / (a * f0) + lat;
+    const ma = (1+n+(5/4)*n*n+(5/4)*n*n*n) * (lat-lat0);
+    const mb = (3*n+3*n*n+(21/8)*n*n*n) * Math.sin(lat-lat0) * Math.cos(lat+lat0);
+    const mc = ((15/8)*n*n+(15/8)*n*n*n) * Math.sin(2*(lat-lat0)) * Math.cos(2*(lat+lat0));
+    const md = (35/24)*n*n*n * Math.sin(3*(lat-lat0)) * Math.cos(3*(lat+lat0));
+    meridionalArc = b * f0 * (ma - mb + mc - md);
+  }while(Math.abs(northing - n0 - meridionalArc) >= 0.00001);
+
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const tanLat = Math.tan(lat);
+  const nu = a * f0 / Math.sqrt(1 - e2 * sinLat * sinLat);
+  const rho = a * f0 * (1-e2) / Math.pow(1 - e2 * sinLat * sinLat, 1.5);
+  const eta2 = nu / rho - 1;
+  const dE = easting - e0;
+  const tan2 = tanLat * tanLat;
+  const tan4 = tan2 * tan2;
+  const tan6 = tan4 * tan2;
+  const secLat = 1 / cosLat;
+
+  const vii = tanLat / (2 * rho * nu);
+  const viii = tanLat / (24 * rho * Math.pow(nu, 3)) * (5 + 3*tan2 + eta2 - 9*tan2*eta2);
+  const ix = tanLat / (720 * rho * Math.pow(nu, 5)) * (61 + 90*tan2 + 45*tan4);
+  const x = secLat / nu;
+  const xi = secLat / (6 * Math.pow(nu, 3)) * (nu/rho + 2*tan2);
+  const xii = secLat / (120 * Math.pow(nu, 5)) * (5 + 28*tan2 + 24*tan4);
+  const xiia = secLat / (5040 * Math.pow(nu, 7)) * (61 + 662*tan2 + 1320*tan4 + 720*tan6);
+
+  const osgbLat = lat - vii*dE*dE + viii*Math.pow(dE, 4) - ix*Math.pow(dE, 6);
+  const osgbLon = lon0 + x*dE - xi*Math.pow(dE, 3) + xii*Math.pow(dE, 5) - xiia*Math.pow(dE, 7);
+
+  return osgb36ToWgs84(osgbLat, osgbLon);
+}
+
+function osgb36ToWgs84(lat, lon){
+  const deg = Math.PI / 180;
+  const a = 6377563.396;
+  const b = 6356256.909;
+  const e2 = 1 - (b*b)/(a*a);
+  const sinLat = Math.sin(lat);
+  const cosLat = Math.cos(lat);
+  const nu = a / Math.sqrt(1 - e2 * sinLat * sinLat);
+
+  const x1 = nu * cosLat * Math.cos(lon);
+  const y1 = nu * cosLat * Math.sin(lon);
+  const z1 = (1 - e2) * nu * sinLat;
+
+  const tx = 446.448;
+  const ty = -125.157;
+  const tz = 542.06;
+  const s = -20.4894e-6;
+  const rx = (0.1502 / 3600) * deg;
+  const ry = (0.2470 / 3600) * deg;
+  const rz = (0.8421 / 3600) * deg;
+
+  const x2 = tx + (1+s)*x1 - rz*y1 + ry*z1;
+  const y2 = ty + rz*x1 + (1+s)*y1 - rx*z1;
+  const z2 = tz - ry*x1 + rx*y1 + (1+s)*z1;
+
+  const wgsA = 6378137;
+  const wgsB = 6356752.3141;
+  const wgsE2 = 1 - (wgsB*wgsB)/(wgsA*wgsA);
+  const p = Math.sqrt(x2*x2 + y2*y2);
+  let phi = Math.atan2(z2, p * (1-wgsE2));
+  let previous;
+
+  do{
+    previous = phi;
+    const nu2 = wgsA / Math.sqrt(1 - wgsE2 * Math.sin(phi) * Math.sin(phi));
+    phi = Math.atan2(z2 + wgsE2 * nu2 * Math.sin(phi), p);
+  }while(Math.abs(phi - previous) > 1e-12);
+
+  return {
+    lat:phi / deg,
+    lon:Math.atan2(y2, x2) / deg
+  };
 }
 
 function latLonToOSGrid(lat, lon){
