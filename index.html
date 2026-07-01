@@ -320,7 +320,7 @@ body.map-mode #surveyMap{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(6,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(7,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -546,6 +546,7 @@ a.primary,button.primary{
         <button class="small" id="tool-tree" type="button" onclick="setMapTool('tree')">Tree</button>
         <button class="small" id="tool-group" type="button" onclick="setMapTool('group')">Group</button>
         <button class="small" id="tool-pole" type="button" onclick="setMapTool('pole')">Add pole</button>
+        <button class="small" id="tool-link" type="button" onclick="setMapTool('link')">Link</button>
         <button class="small" id="tool-label" type="button" onclick="setMapTool('label')">Label</button>
         <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')">Delete</button>
         <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()">Screenshot</button>
@@ -597,6 +598,8 @@ let lockedMapMinZoom = null;
 let surveyMapRendered = false;
 let surveyPolePoints = [];
 let forcedMapPoleId = null;
+let manualMapLinks = [];
+let pendingLinkPoleId = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
 let selectedDrawing = null;
@@ -608,6 +611,7 @@ window.AE_DATA = [];
 
 locateBtn.addEventListener("click", locate);
 loadStoredSpanData();
+loadStoredManualMapLinks();
 loadBundledAEData();
 
 function setBusy(isBusy, text){
@@ -879,6 +883,7 @@ function installSurveyTouchHandlers(mapEl){
 
     if(!surveyMap || !mapLocked || mapTool !== "group") return;
     event.preventDefault();
+    event.stopPropagation();
     mapEl.setPointerCapture?.(event.pointerId);
     strokeStarted = true;
     strokeMoved = false;
@@ -931,6 +936,7 @@ function installSurveyTouchHandlers(mapEl){
 
     if(!strokeStarted || !surveyMap) return;
     event.preventDefault();
+    event.stopPropagation();
     strokePoints.push(surveyMap.containerPointToLatLng(L.point(event.clientX, event.clientY)));
     strokeMoved = strokeMoved || strokePoints.length > 3;
     if(activeStrokePreview) activeStrokePreview.setLatLngs(strokePoints);
@@ -970,6 +976,7 @@ function installSurveyTouchHandlers(mapEl){
 
       if(!strokeStarted) return;
       event.preventDefault();
+      event.stopPropagation();
       mapEl.releasePointerCapture?.(event.pointerId);
       strokeStarted = false;
       suppressClick = true;
@@ -1015,6 +1022,7 @@ function renderSurveyMap(fitAfterRender=true){
   }
 
   renderSurveyLineRuns(points);
+  renderManualMapLinks();
   surveyPoleBounds = L.latLngBounds(bounds);
   surveyMapRendered = true;
   if(fitAfterRender) fitSurveyMap();
@@ -1123,9 +1131,15 @@ function renderSurveyPole(point, showLabel=false){
   point.marker = marker;
 
   marker.on("click", (event) => {
-    if(mapTool !== "delete") return;
-    L.DomEvent.stop(event.originalEvent || event);
-    removeMapPole(point.span.mapPoleId);
+    if(mapTool === "link"){
+      L.DomEvent.stop(event.originalEvent || event);
+      handleManualPoleLink(point);
+      return;
+    }
+    if(mapTool === "delete"){
+      L.DomEvent.stop(event.originalEvent || event);
+      removeMapPole(point.span.mapPoleId);
+    }
   });
 
   marker.on("dragstart", () => {
@@ -1216,7 +1230,21 @@ function renderSurveyLineRuns(points){
   }
 }
 
-function drawSurveyNetworkLine(latlngs, isGap=false){
+function renderManualMapLinks(){
+  if(!surveyLineLayer || !manualMapLinks.length) return;
+  const pointsById = new Map(surveyPolePoints.map((point) => [point.span.mapPoleId, point]));
+  const before = manualMapLinks.length;
+  manualMapLinks = manualMapLinks.filter((link) => pointsById.has(link.a) && pointsById.has(link.b));
+  if(manualMapLinks.length !== before) persistManualMapLinks();
+
+  for(const link of manualMapLinks){
+    const a = pointsById.get(link.a);
+    const b = pointsById.get(link.b);
+    drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], false, link.id);
+  }
+}
+
+function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null){
   L.polyline(latlngs, {
     color:"#f7fbff",
     weight:8,
@@ -1225,19 +1253,28 @@ function drawSurveyNetworkLine(latlngs, isGap=false){
     lineCap:"round"
   }).addTo(surveyLineLayer);
 
-  L.polyline(latlngs, {
+  const line = L.polyline(latlngs, {
     color:"#2648d8",
     weight:4,
     opacity:0.95,
     dashArray:isGap ? "1 14" : null,
     lineCap:"round"
   }).addTo(surveyLineLayer);
+
+  if(manualLinkId){
+    line.on("click", (event) => {
+      if(mapTool !== "delete") return;
+      L.DomEvent.stop(event.originalEvent || event);
+      removeManualMapLink(manualLinkId);
+    });
+  }
 }
 
 function redrawSurveyLinesOnly(){
   if(!surveyLineLayer) return;
   surveyLineLayer.clearLayers();
   renderSurveyLineRuns(surveyPolePoints);
+  renderManualMapLinks();
 }
 
 function toggleSurveyLock(){
@@ -1443,10 +1480,68 @@ function removeMapPole(mapPoleId){
 
   spans.splice(index, 1);
   if(forcedMapPoleId === mapPoleId) forcedMapPoleId = null;
+  manualMapLinks = manualMapLinks.filter((link) => link.a !== mapPoleId && link.b !== mapPoleId);
+  persistManualMapLinks();
   persistSpanData();
   renderSurveyMap(false);
   setMapTool("pan", true);
   setSurveyMapStatus(`${name} removed.`);
+}
+
+function handleManualPoleLink(point){
+  const poleId = point.span.mapPoleId;
+  if(!pendingLinkPoleId){
+    pendingLinkPoleId = poleId;
+    setSurveyMapStatus(`Link started at ${point.label}. Tap the next pole.`);
+    return;
+  }
+
+  if(pendingLinkPoleId === poleId){
+    pendingLinkPoleId = null;
+    setMapTool("pan", true);
+    setSurveyMapStatus("Link cancelled.");
+    return;
+  }
+
+  const existing = manualMapLinks.some((link) =>
+    (link.a === pendingLinkPoleId && link.b === poleId) ||
+    (link.a === poleId && link.b === pendingLinkPoleId)
+  );
+
+  if(existing){
+    pendingLinkPoleId = null;
+    setMapTool("pan", true);
+    setSurveyMapStatus("Those poles are already linked.");
+    return;
+  }
+
+  manualMapLinks.push({
+    id:createId("link"),
+    a:pendingLinkPoleId,
+    b:poleId
+  });
+  pendingLinkPoleId = null;
+  persistManualMapLinks();
+  redrawSurveyLinesOnly();
+  setMapTool("pan", true);
+  setSurveyMapStatus("Poles linked.");
+}
+
+function removeManualMapLink(linkId){
+  const before = manualMapLinks.length;
+  manualMapLinks = manualMapLinks.filter((link) => link.id !== linkId);
+  if(manualMapLinks.length === before) return;
+  persistManualMapLinks();
+  redrawSurveyLinesOnly();
+  setSurveyMapStatus("Manual pole link removed.");
+}
+
+function persistManualMapLinks(){
+  try{
+    localStorage.setItem("treeSurveyManualMapLinks", JSON.stringify(manualMapLinks));
+  }catch{
+    setSurveyMapStatus("Link changed, but this browser could not save it locally.");
+  }
 }
 
 function createId(prefix){
@@ -1454,11 +1549,13 @@ function createId(prefix){
 }
 
 function setMapTool(tool, force=false){
-  if(!force && ["pole","tree","group"].includes(tool) && mapTool === tool){
+  if(!force && ["pole","tree","group","link"].includes(tool) && mapTool === tool){
     tool = "pan";
   }
   mapTool = tool;
-  for(const id of ["pan","pole","tree","group","route","label","delete"]){
+  if(tool !== "link") pendingLinkPoleId = null;
+  updateMapMovementForTool();
+  for(const id of ["pan","pole","tree","group","link","route","label","delete"]){
     const button = document.getElementById(`tool-${id}`);
     if(button) button.classList.toggle("active", id === tool);
   }
@@ -1467,11 +1564,21 @@ function setMapTool(tool, force=false){
     pole:"Tap where the missing pole should go.",
     tree:"Tap once to place a single tree circle.",
     group:"Draw around the group. The app will tidy it into the closest shape.",
+    link:"Tap one pole, then tap the pole it should link to.",
     route:"Tap along the access route. Press Finish route when done.",
     label:"Tap the map, then type a label.",
-    delete:"Tap a drawn mark or pole to remove it."
+    delete:"Tap a drawn mark, manual link, or pole to remove it."
   };
   setSurveyMapStatus(messages[tool] || "Map tool selected.");
+}
+
+function updateMapMovementForTool(){
+  if(!surveyMap) return;
+  if(mapLocked && mapTool === "group"){
+    disableSurveyMapMovement();
+  }else{
+    enableSurveyMapMovement();
+  }
 }
 
 function handleSurveyMapClick(event){
@@ -2000,6 +2107,19 @@ function loadStoredSpanData(){
   }
 }
 
+function loadStoredManualMapLinks(){
+  try{
+    const stored = localStorage.getItem("treeSurveyManualMapLinks");
+    if(!stored) return;
+    const links = JSON.parse(stored);
+    manualMapLinks = Array.isArray(links)
+      ? links.filter((link) => link && link.id && link.a && link.b)
+      : [];
+  }catch{
+    manualMapLinks = [];
+  }
+}
+
 function updateSpanDataStatus(message=""){
   const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
   spanDataStatus.textContent = message || (count
@@ -2049,7 +2169,10 @@ async function importSpanFiles(){
 
 function clearSpanData(){
   localStorage.removeItem("treeSurveySpanData");
+  localStorage.removeItem("treeSurveyManualMapLinks");
   window.SPAN_DATA = [];
+  manualMapLinks = [];
+  pendingLinkPoleId = null;
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
   if(surveyPoleLayer) surveyPoleLayer.clearLayers();
