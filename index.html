@@ -31,9 +31,32 @@ header{
 h1,h2,p{margin:0}
 h1{font-size:22px}
 main{
-  width:min(100%,720px);
+  width:min(100%,980px);
   margin:auto;
   padding:18px 14px 34px;
+}
+.tabs{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:14px;
+}
+.tab-btn{
+  min-height:42px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:rgba(255,255,255,.06);
+  color:var(--cream);
+  font:700 14px Arial,sans-serif;
+  cursor:pointer;
+}
+.tab-btn.active{
+  border-color:var(--amber);
+  background:var(--amber);
+  color:#191204;
+}
+.view{
+  display:block;
 }
 .hero{
   display:grid;
@@ -173,8 +196,51 @@ textarea.text-field{
   overflow:hidden;
   background:#d8dfcf;
 }
+#surveyMap{
+  width:100%;
+  height:min(72vh,680px);
+  min-height:430px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  overflow:hidden;
+  background:#d8dfcf;
+}
 .leaflet-container{
   font-family:Arial,sans-serif;
+}
+.map-toolbar{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:12px;
+}
+.map-toolbar .small.active{
+  border-color:var(--amber);
+  background:var(--amber);
+  color:#191204;
+}
+.pole-label{
+  color:#101010;
+  font:700 13px Arial,sans-serif;
+  text-shadow:0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
+  white-space:nowrap;
+}
+.draw-label{
+  display:grid;
+  width:44px;
+  height:44px;
+  place-items:center;
+  border:5px solid #5fbd65;
+  border-radius:50%;
+  background:rgba(255,255,255,.86);
+  color:#111;
+  font:700 22px Arial,sans-serif;
+}
+.text-label{
+  color:#111;
+  font:700 17px Arial,sans-serif;
+  text-shadow:0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
+  white-space:nowrap;
 }
 .marker-row{
   display:grid;
@@ -202,6 +268,8 @@ a.primary,button.primary{
 @media(max-width:520px){
   .actions{grid-template-columns:1fr}
   .search-form{grid-template-columns:1fr}
+  .tabs{grid-template-columns:1fr}
+  .map-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}
   .marker-row{grid-template-columns:1fr}
   .field-grid{grid-template-columns:1fr}
   .value{font-size:20px}
@@ -214,34 +282,66 @@ a.primary,button.primary{
 </header>
 
 <main>
-  <section class="hero">
-    <button id="locateBtn" type="button">LOCATE</button>
-    <div id="status">Tap to locate</div>
+  <nav class="tabs" aria-label="App views">
+    <button class="tab-btn active" id="locatorTab" type="button" onclick="switchView('locator')">Locator</button>
+    <button class="tab-btn" id="mapTab" type="button" onclick="switchView('map')">Map</button>
+  </nav>
+
+  <section id="locatorView" class="view">
+    <section class="hero">
+      <button id="locateBtn" type="button">LOCATE</button>
+      <div id="status">Tap to locate</div>
+    </section>
+
+    <section class="card search-panel">
+      <h2>Span data</h2>
+      <div class="field-row">
+        <input class="file-field" id="spanFileInput" type="file" accept=".csv,.xlsx,.xls" multiple>
+      </div>
+      <div class="detail" id="spanDataStatus">No span spreadsheet imported on this device.</div>
+      <div class="actions">
+        <button class="small primary" type="button" onclick="importSpanFiles()">Import spreadsheet</button>
+        <button class="small" type="button" onclick="clearSpanData()">Clear data</button>
+      </div>
+    </section>
+
+    <section class="card search-panel">
+      <h2>Find span</h2>
+      <form class="search-form" onsubmit="searchSpan(event)">
+        <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref">
+        <button class="small primary" type="submit">Search</button>
+      </form>
+      <div class="detail" id="spanSearchStatus">Search your uploaded LV/HV span data.</div>
+      <div class="match-list" id="spanSearchResults"></div>
+    </section>
+
+    <section id="results" class="grid"></section>
   </section>
 
-  <section class="card search-panel">
-    <h2>Span data</h2>
-    <div class="field-row">
-      <input class="file-field" id="spanFileInput" type="file" accept=".csv,.xlsx,.xls" multiple>
-    </div>
-    <div class="detail" id="spanDataStatus">No span spreadsheet imported on this device.</div>
-    <div class="actions">
-      <button class="small primary" type="button" onclick="importSpanFiles()">Import spreadsheet</button>
-      <button class="small" type="button" onclick="clearSpanData()">Clear data</button>
-    </div>
+  <section id="mapView" class="view hidden">
+    <section class="card search-panel">
+      <h2>Map drawing</h2>
+      <div class="value">Pole map</div>
+      <div class="detail" id="surveyMapStatus">Import a span spreadsheet, then build the map.</div>
+      <div class="actions">
+        <button class="small primary" type="button" onclick="renderSurveyMap()">Build map</button>
+        <button class="small" type="button" onclick="fitSurveyMap()">Fit poles</button>
+      </div>
+      <div class="map-toolbar">
+        <button class="small active" id="tool-pan" type="button" onclick="setMapTool('pan')">Pan</button>
+        <button class="small" id="tool-tree" type="button" onclick="setMapTool('tree')">Tree</button>
+        <button class="small" id="tool-group" type="button" onclick="setMapTool('group')">Group</button>
+        <button class="small" id="tool-route" type="button" onclick="setMapTool('route')">Access</button>
+        <button class="small" id="tool-label" type="button" onclick="setMapTool('label')">Label</button>
+        <button class="small" type="button" onclick="finishAccessRoute()">Finish route</button>
+        <button class="small" type="button" onclick="undoMapDrawing()">Undo</button>
+        <button class="small danger" type="button" onclick="clearMapDrawings()">Clear marks</button>
+      </div>
+    </section>
+    <section class="card">
+      <div id="surveyMap" aria-label="Survey map drawing area"></div>
+    </section>
   </section>
-
-  <section class="card search-panel">
-    <h2>Find span</h2>
-    <form class="search-form" onsubmit="searchSpan(event)">
-      <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref">
-      <button class="small primary" type="submit">Search</button>
-    </form>
-    <div class="detail" id="spanSearchStatus">Search your uploaded LV/HV span data.</div>
-    <div class="match-list" id="spanSearchResults"></div>
-  </section>
-
-  <section id="results" class="grid"></section>
 </main>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
@@ -255,12 +355,27 @@ const spanDataStatus = document.getElementById("spanDataStatus");
 const spanSearchInput = document.getElementById("spanSearchInput");
 const spanSearchStatus = document.getElementById("spanSearchStatus");
 const spanSearchResults = document.getElementById("spanSearchResults");
+const locatorView = document.getElementById("locatorView");
+const mapView = document.getElementById("mapView");
+const locatorTab = document.getElementById("locatorTab");
+const mapTab = document.getElementById("mapTab");
+const surveyMapStatus = document.getElementById("surveyMapStatus");
 let currentReport = null;
 let currentSpanMatches = [];
 let currentLocateMatches = [];
 let w3wMap = null;
 let w3wMarker = null;
 let w3wMarkerPosition = null;
+let surveyMap = null;
+let surveyPoleLayer = null;
+let surveyLineLayer = null;
+let surveyDrawingLayer = null;
+let surveyPoleBounds = null;
+let mapTool = "pan";
+let mapDrawingStack = [];
+let drawCounters = { tree:0, group:0 };
+let activeRoute = null;
+let activeRoutePoints = [];
 window.SPAN_DATA = [];
 window.AE_DATA = [];
 
@@ -317,6 +432,292 @@ async function copyText(encoded){
   }
 }
 
+function switchView(view){
+  const showMap = view === "map";
+  locatorView.classList.toggle("hidden", showMap);
+  mapView.classList.toggle("hidden", !showMap);
+  locatorTab.classList.toggle("active", !showMap);
+  mapTab.classList.toggle("active", showMap);
+
+  if(showMap){
+    initSurveyMap();
+    setTimeout(() => {
+      if(surveyMap) surveyMap.invalidateSize();
+    }, 100);
+  }
+}
+
+function initSurveyMap(attempts=0){
+  if(surveyMap) return;
+
+  if(!window.L){
+    if(attempts > 12){
+      setSurveyMapStatus("Map library could not load. Check signal, then refresh.");
+      return;
+    }
+    setSurveyMapStatus("Map is loading...");
+    setTimeout(() => initSurveyMap(attempts + 1), 500);
+    return;
+  }
+
+  const mapEl = document.getElementById("surveyMap");
+  if(!mapEl) return;
+
+  surveyMap = L.map(mapEl, {
+    zoomControl:true,
+    attributionControl:true
+  }).setView([52.68, -1.82], 13);
+
+  const streetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom:19,
+    attribution:"&copy; OpenStreetMap"
+  }).addTo(surveyMap);
+
+  const satelliteLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom:19,
+    attribution:"Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+  });
+
+  L.control.layers({
+    "Street map": streetLayer,
+    "Satellite": satelliteLayer
+  }, null, {
+    collapsed:true,
+    position:"topright"
+  }).addTo(surveyMap);
+
+  surveyLineLayer = L.layerGroup().addTo(surveyMap);
+  surveyPoleLayer = L.layerGroup().addTo(surveyMap);
+  surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
+  surveyMap.on("click", handleSurveyMapClick);
+  setSurveyMapStatus("Import span data, then build the map.");
+}
+
+function setSurveyMapStatus(message){
+  if(surveyMapStatus) surveyMapStatus.textContent = message;
+}
+
+function renderSurveyMap(){
+  initSurveyMap();
+  if(!surveyMap || !surveyPoleLayer || !surveyLineLayer) return;
+
+  const points = getSurveyPolePoints();
+  surveyPoleLayer.clearLayers();
+  surveyLineLayer.clearLayers();
+  surveyPoleBounds = null;
+
+  if(!points.length){
+    setSurveyMapStatus("No plottable poles found. Import a spreadsheet with Grid Ref or Grid Reference.");
+    return;
+  }
+
+  const bounds = [];
+  for(const point of points){
+    renderSurveyPole(point);
+    bounds.push([point.lat, point.lon]);
+  }
+
+  renderSurveyLineRuns(points);
+  surveyPoleBounds = L.latLngBounds(bounds);
+  fitSurveyMap();
+  setSurveyMapStatus(`${points.length} poles plotted. Blue lines are auto-linked by pole prefix and number.`);
+}
+
+function fitSurveyMap(){
+  if(!surveyMap) initSurveyMap();
+  if(surveyMap && surveyPoleBounds && surveyPoleBounds.isValid()){
+    surveyMap.fitBounds(surveyPoleBounds.pad(0.18), { maxZoom:18 });
+  }
+}
+
+function getSurveyPolePoints(){
+  const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
+  return spans
+    .map((span) => {
+      const position = getSpanMapPosition(span);
+      if(!position) return null;
+      const label = poleDisplayName(span);
+      const parsed = parsePoleLabel(label);
+      return {
+        span,
+        label,
+        lat:position.lat,
+        lon:position.lon,
+        prefix:parsed.prefix,
+        number:parsed.number,
+        suffix:parsed.suffix,
+        network:span.networkNumber || span.primaryNo || "network"
+      };
+    })
+    .filter(Boolean);
+}
+
+function renderSurveyPole(point){
+  const marker = L.circleMarker([point.lat, point.lon], {
+    radius:6,
+    color:"#1d4ed8",
+    weight:2,
+    fillColor:"#ffffff",
+    fillOpacity:1
+  }).addTo(surveyPoleLayer);
+
+  marker.bindTooltip(point.label, {
+    permanent:true,
+    direction:"top",
+    offset:[0,-8],
+    className:"pole-label"
+  });
+
+  marker.bindPopup([
+    point.label,
+    point.span.gridRef || "",
+    point.span.networkNumber || point.span.primaryNo || "",
+    point.span.circuitName || ""
+  ].filter(Boolean).map(escapeHtml).join("<br>"));
+}
+
+function renderSurveyLineRuns(points){
+  const groups = new Map();
+
+  for(const point of points){
+    const key = `${point.network}|${point.prefix || "unknown"}`;
+    if(!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(point);
+  }
+
+  for(const group of groups.values()){
+    const ordered = group
+      .filter((point) => Number.isFinite(point.number))
+      .sort((a, b) => a.number - b.number || String(a.suffix).localeCompare(String(b.suffix)));
+
+    for(let i = 0; i < ordered.length - 1; i++){
+      const a = ordered[i];
+      const b = ordered[i + 1];
+      const distanceM = haversineKm(a.lat, a.lon, b.lat, b.lon) * 1000;
+      L.polyline([[a.lat, a.lon], [b.lat, b.lon]], {
+        color:"#2563eb",
+        weight:4,
+        opacity:0.85,
+        dashArray:distanceM > 250 ? "10 10" : null
+      }).addTo(surveyLineLayer);
+    }
+  }
+}
+
+function poleDisplayName(span){
+  return String(span.toPole || span.span || span.externalReference || "Pole").trim();
+}
+
+function parsePoleLabel(label){
+  const match = String(label || "").trim().match(/^([A-Za-z]+)\s*0*(\d+)([A-Za-z]*)/);
+  return {
+    prefix:match ? match[1].toUpperCase() : "UNKNOWN",
+    number:match ? Number(match[2]) : NaN,
+    suffix:match ? match[3].toUpperCase() : ""
+  };
+}
+
+function setMapTool(tool){
+  mapTool = tool;
+  for(const id of ["pan","tree","group","route","label"]){
+    const button = document.getElementById(`tool-${id}`);
+    if(button) button.classList.toggle("active", id === tool);
+  }
+  const messages = {
+    pan:"Pan the map or tap a pole.",
+    tree:"Tap the map to place T markers.",
+    group:"Tap the map to place G markers.",
+    route:"Tap along the access route. Press Finish route when done.",
+    label:"Tap the map, then type a label."
+  };
+  setSurveyMapStatus(messages[tool] || "Map tool selected.");
+}
+
+function handleSurveyMapClick(event){
+  if(mapTool === "tree") addSurveyCircle("tree", event.latlng);
+  else if(mapTool === "group") addSurveyCircle("group", event.latlng);
+  else if(mapTool === "route") addAccessRoutePoint(event.latlng);
+  else if(mapTool === "label") addSurveyTextLabel(event.latlng);
+}
+
+function addSurveyCircle(kind, latlng){
+  const prefix = kind === "group" ? "G" : "T";
+  const key = kind === "group" ? "group" : "tree";
+  drawCounters[key] += 1;
+  const text = `${prefix}${drawCounters[key]}`;
+  const marker = L.marker(latlng, {
+    draggable:true,
+    icon:L.divIcon({
+      className:"",
+      html:`<div class="draw-label">${escapeHtml(text)}</div>`,
+      iconSize:[44,44],
+      iconAnchor:[22,22]
+    })
+  }).addTo(surveyDrawingLayer);
+  mapDrawingStack.push(marker);
+}
+
+function addAccessRoutePoint(latlng){
+  activeRoutePoints.push(latlng);
+
+  if(!activeRoute){
+    activeRoute = L.polyline([], {
+      color:"#f4c430",
+      weight:5,
+      opacity:0.95
+    }).addTo(surveyDrawingLayer);
+    mapDrawingStack.push(activeRoute);
+  }
+
+  activeRoute.setLatLngs(activeRoutePoints);
+}
+
+function finishAccessRoute(){
+  activeRoute = null;
+  activeRoutePoints = [];
+  setSurveyMapStatus("Access route finished.");
+}
+
+function addSurveyTextLabel(latlng){
+  const text = window.prompt("Label text");
+  if(!text) return;
+  const marker = L.marker(latlng, {
+    draggable:true,
+    icon:L.divIcon({
+      className:"",
+      html:`<div class="text-label">${escapeHtml(text)}</div>`,
+      iconSize:[120,26],
+      iconAnchor:[0,13]
+    })
+  }).addTo(surveyDrawingLayer);
+  mapDrawingStack.push(marker);
+}
+
+function undoMapDrawing(){
+  if(activeRoute && activeRoutePoints.length){
+    activeRoutePoints.pop();
+    activeRoute.setLatLngs(activeRoutePoints);
+    if(!activeRoutePoints.length){
+      surveyDrawingLayer.removeLayer(activeRoute);
+      mapDrawingStack = mapDrawingStack.filter((layer) => layer !== activeRoute);
+      activeRoute = null;
+    }
+    return;
+  }
+
+  const layer = mapDrawingStack.pop();
+  if(layer && surveyDrawingLayer) surveyDrawingLayer.removeLayer(layer);
+}
+
+function clearMapDrawings(){
+  if(surveyDrawingLayer) surveyDrawingLayer.clearLayers();
+  mapDrawingStack = [];
+  activeRoute = null;
+  activeRoutePoints = [];
+  drawCounters = { tree:0, group:0 };
+  setSurveyMapStatus("Map markings cleared.");
+}
+
 function loadStoredSpanData(){
   try{
     const stored = localStorage.getItem("treeSurveySpanData");
@@ -342,6 +743,11 @@ function updateSpanDataStatus(message=""){
   spanSearchStatus.textContent = count
     ? "Search your imported LV/HV span data."
     : "Import a spreadsheet before searching spans.";
+  if(surveyMapStatus){
+    surveyMapStatus.textContent = count
+      ? `${count} span rows ready. Build the map to plot pole locations.`
+      : "Import a span spreadsheet, then build the map.";
+  }
 }
 
 async function importSpanFiles(){
@@ -370,6 +776,7 @@ async function importSpanFiles(){
     currentSpanMatches = [];
     spanSearchResults.innerHTML = "";
     updateSpanDataStatus(`${imported.length} spans imported.`);
+    if(surveyMap) renderSurveyMap();
   }catch(error){
     updateSpanDataStatus(error.message || "Could not import that spreadsheet.");
   }
@@ -380,6 +787,9 @@ function clearSpanData(){
   window.SPAN_DATA = [];
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
+  if(surveyPoleLayer) surveyPoleLayer.clearLayers();
+  if(surveyLineLayer) surveyLineLayer.clearLayers();
+  surveyPoleBounds = null;
   updateSpanDataStatus("Span data cleared from this device.");
 }
 
@@ -476,18 +886,22 @@ function parseCsvRows(text){
 }
 
 function normaliseImportedSpan(row){
+  const toPole = getRowValue(row, ["ToPole", "To Pole", "toPole"]);
+  const networkNumber = getRowValue(row, ["Network Number", "Network No", "NetworkNumber", "networkNumber"]);
+
   const span = {
-    primaryNo:getRowValue(row, ["Primary No", "PrimaryNo", "primaryNo"]),
+    primaryNo:getRowValue(row, ["Primary No", "PrimaryNo", "primaryNo", "Network Number", "Network No", "NetworkNumber"]),
     primaryName:getRowValue(row, ["Primary Name", "PrimaryName", "primaryName"]),
     hvFeeder:getRowValue(row, ["HV Feeder", "HVFeeder", "hvFeeder"]),
     feederName:getRowValue(row, ["Feeder Name", "FeederName", "feederName"]),
     distNo:getRowValue(row, ["Dist No", "DistNo", "distNo"]),
-    circuitName:getRowValue(row, ["circuitName", "Circuit Name", "CircuitName"]),
+    circuitName:getRowValue(row, ["circuitName", "Circuit Name", "CircuitName", "Contract"]),
     voltage:getRowValue(row, ["V", "Voltage", "voltage"]),
-    span:getRowValue(row, ["Span", "span", "spanId"]),
-    toPole:getRowValue(row, ["ToPole", "To Pole", "toPole"]),
+    span:getRowValue(row, ["Span", "span", "spanId"]) || toPole,
+    toPole,
     externalReference:getRowValue(row, ["ExternalReference", "External Reference", "externalReference"]),
-    gridRef:getRowValue(row, ["Grid Ref", "GridRef", "gridRef"]),
+    networkNumber,
+    gridRef:getRowValue(row, ["Grid Ref", "GridRef", "gridRef", "Grid Reference", "GridReference"]),
     latitude:parseCoordinateNumber(getRowValue(row, ["latitude", "Latitude", "lat"])),
     longitude:parseCoordinateNumber(getRowValue(row, ["longitude", "Longitude", "lon", "lng"]))
   };
@@ -1179,8 +1593,14 @@ function osGridRefToLatLon(gridRef){
 
 function osGridRefToEastNorth(gridRef){
   const compact = compactSearchText(gridRef).toUpperCase();
-  const match = compact.match(/^([A-Z]{2})(\d{3})\d{0,3}(\d{3})\d{0,3}$/);
+  const match = compact.match(/^([A-Z]{2})(\d{6,12})$/);
   if(!match) return null;
+  const digits = match[2];
+  if(digits.length % 2 !== 0) return null;
+  const halfLength = digits.length / 2;
+  const eDigits = digits.slice(0, halfLength);
+  const nDigits = digits.slice(halfLength);
+  const scale = Math.pow(10, 5 - halfLength);
 
   let l1 = match[1].charCodeAt(0) - 65;
   let l2 = match[1].charCodeAt(1) - 65;
@@ -1192,8 +1612,8 @@ function osGridRefToEastNorth(gridRef){
   if(e100k < 0 || e100k > 6 || n100k < 0 || n100k > 12) return null;
 
   return {
-    easting:e100k * 100000 + Number(match[2]) * 100 + 50,
-    northing:n100k * 100000 + Number(match[3]) * 100 + 50
+    easting:e100k * 100000 + Number(eDigits) * scale + scale / 2,
+    northing:n100k * 100000 + Number(nDigits) * scale + scale / 2
   };
 }
 
