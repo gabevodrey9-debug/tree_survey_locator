@@ -596,6 +596,7 @@ let lockedMapBounds = null;
 let lockedMapMinZoom = null;
 let surveyMapRendered = false;
 let surveyPolePoints = [];
+let forcedMapPoleId = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
 let selectedDrawing = null;
@@ -732,6 +733,7 @@ function initSurveyMap(attempts=0){
   surveyLineLayer = L.layerGroup().addTo(surveyMap);
   surveyPoleLayer = L.layerGroup().addTo(surveyMap);
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
+  surveyMap.on("zoomend moveend", () => refreshSurveyPoleMarkers());
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
   renderSurveyMap(true);
@@ -787,8 +789,10 @@ function searchMapSpan(event){
   }
 
   if(mapLocked) unlockSurveyFrame(false);
+  forcedMapPoleId = span.mapPoleId || null;
   const zoom = Math.max(surveyMap.getZoom() || 0, 18);
   surveyMap.setView([position.lat, position.lon], zoom, { animate:false });
+  refreshSurveyPoleMarkers(forcedMapPoleId);
 
   const point = surveyPolePoints.find((item) => item.span === span || item.span?.mapPoleId === span.mapPoleId);
   if(point?.marker){
@@ -1007,7 +1011,6 @@ function renderSurveyMap(fitAfterRender=true){
 
   const bounds = [];
   for(const point of points){
-    renderSurveyPole(point);
     bounds.push([point.lat, point.lon]);
   }
 
@@ -1015,6 +1018,7 @@ function renderSurveyMap(fitAfterRender=true){
   surveyPoleBounds = L.latLngBounds(bounds);
   surveyMapRendered = true;
   if(fitAfterRender) fitSurveyMap();
+  refreshSurveyPoleMarkers();
   setSurveyMapStage(mapLocked ? "Drawing tools" : "Frame the span");
   setSurveyMapStatus(`${points.length} poles plotted automatically. Drag poles if any point needs correcting, then lock the map.`);
 }
@@ -1032,6 +1036,7 @@ function getSurveyPolePoints(){
     .map((span) => {
       const position = getSpanMapPosition(span);
       if(!position) return null;
+      if(!span.mapPoleId) span.mapPoleId = createId("pole");
       const label = poleDisplayName(span);
       const parsed = parsePoleLabel(label);
       return {
@@ -1048,8 +1053,54 @@ function getSurveyPolePoints(){
     .filter(Boolean);
 }
 
-function renderSurveyPole(point){
-  if(!point.span.mapPoleId) point.span.mapPoleId = createId("pole");
+function refreshSurveyPoleMarkers(forceMapPoleId=null){
+  if(!surveyMap || !surveyPoleLayer || !surveyPolePoints.length) return;
+  const forceId = forceMapPoleId || forcedMapPoleId;
+  const zoom = surveyMap.getZoom();
+  const density = poleDisplayDensity(zoom);
+  const bounds = surveyMap.getBounds().pad(0.08);
+  const shown = [];
+  const usedCells = new Set();
+
+  surveyPoleLayer.clearLayers();
+  for(const point of surveyPolePoints){
+    point.marker = null;
+  }
+
+  for(const point of surveyPolePoints){
+    const isForced = forceId && point.span.mapPoleId === forceId;
+    if(!isForced && !bounds.contains([point.lat, point.lon])) continue;
+
+    let showLabel = isForced || density.showLabels;
+    if(density.cellSize > 0 && !isForced){
+      const pixel = surveyMap.latLngToContainerPoint([point.lat, point.lon]);
+      const key = `${Math.floor(pixel.x / density.cellSize)}:${Math.floor(pixel.y / density.cellSize)}`;
+      showLabel = !usedCells.has(key);
+      if(showLabel) usedCells.add(key);
+    }
+
+    shown.push({ point, showLabel });
+  }
+
+  if(!shown.length){
+    const fallback = surveyPolePoints.find((point) => bounds.contains([point.lat, point.lon])) || surveyPolePoints[0];
+    if(fallback) shown.push({ point:fallback, showLabel:false });
+  }
+
+  for(const item of shown){
+    renderSurveyPole(item.point, item.showLabel);
+  }
+}
+
+function poleDisplayDensity(zoom){
+  if(zoom >= 17.5) return { cellSize:0, showLabels:true };
+  if(zoom >= 16.5) return { cellSize:82, showLabels:true };
+  if(zoom >= 15.5) return { cellSize:115, showLabels:true };
+  if(zoom >= 14) return { cellSize:165, showLabels:false };
+  return { cellSize:240, showLabels:false };
+}
+
+function renderSurveyPole(point, showLabel=false){
   const marker = L.marker([point.lat, point.lon], {
     draggable:true,
     title:point.label,
@@ -1062,7 +1113,7 @@ function renderSurveyPole(point){
   }).addTo(surveyPoleLayer);
 
   marker.bindTooltip(point.label, {
-    permanent:true,
+    permanent:showLabel,
     direction:"top",
     offset:[0,-8],
     className:"pole-label"
@@ -1391,6 +1442,7 @@ function removeMapPole(mapPoleId){
   if(!ok) return;
 
   spans.splice(index, 1);
+  if(forcedMapPoleId === mapPoleId) forcedMapPoleId = null;
   persistSpanData();
   renderSurveyMap(false);
   setMapTool("pan", true);
@@ -2004,6 +2056,7 @@ function clearSpanData(){
   if(surveyLineLayer) surveyLineLayer.clearLayers();
   surveyPoleBounds = null;
   surveyPolePoints = [];
+  forcedMapPoleId = null;
   surveyMapRendered = false;
   unlockSurveyFrame(false);
   updateSpanDataStatus("Span data cleared from this device.");
