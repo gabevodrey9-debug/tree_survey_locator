@@ -316,11 +316,12 @@ body.map-mode #surveyMap{
 .map-toolbar,
 .map-actions,
 .frame-actions,
-.map-compact-actions{
+.map-compact-actions,
+.map-rotation-actions{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(7,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(8,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -331,14 +332,25 @@ body.map-mode #surveyMap{
 .map-compact-actions{
   grid-template-columns:1fr;
 }
+.map-rotation-actions{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+  margin-top:6px;
+}
 .map-toolbar .small,
 .map-actions .small,
 .frame-actions .small,
-.map-compact-actions .small{
+.map-compact-actions .small,
+.map-rotation-actions .small{
   min-height:48px;
   padding:10px 8px;
   touch-action:manipulation;
   user-select:none;
+}
+.map-rotation-actions .small{
+  min-height:38px;
+  padding:8px 4px;
+  font-size:12px;
 }
 .map-toolbar .small.active{
   border-color:var(--amber);
@@ -466,7 +478,7 @@ a.primary,button.primary{
   body.map-mode .map-top-right{
     top:8px;
   }
-  .map-toolbar{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .map-toolbar{grid-template-columns:repeat(4,minmax(0,1fr))}
   .map-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
   .frame-actions{grid-template-columns:1fr}
   .marker-row{grid-template-columns:1fr}
@@ -529,6 +541,11 @@ a.primary,button.primary{
       <div class="map-compact-actions">
         <button class="small" id="baseMapToggleBtn" type="button" onclick="toggleSurveyBaseMap()">Satellite</button>
       </div>
+      <div class="map-rotation-actions">
+        <button class="small" type="button" onclick="rotateSurveyMap(-15)">Left</button>
+        <button class="small" id="mapNorthBtn" type="button" onclick="resetSurveyMapRotation()">North</button>
+        <button class="small" type="button" onclick="rotateSurveyMap(15)">Right</button>
+      </div>
     </section>
 
     <section class="card map-search">
@@ -547,6 +564,7 @@ a.primary,button.primary{
         <button class="small" id="tool-group" type="button" onclick="setMapTool('group')">Group</button>
         <button class="small" id="tool-pole" type="button" onclick="setMapTool('pole')">Add pole</button>
         <button class="small" id="tool-link" type="button" onclick="setMapTool('link')">Link</button>
+        <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')">Unlink</button>
         <button class="small" id="tool-label" type="button" onclick="setMapTool('label')">Label</button>
         <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')">Delete</button>
         <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()">Screenshot</button>
@@ -560,6 +578,7 @@ a.primary,button.primary{
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+<script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js" defer></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 <script>
 const locateBtn = document.getElementById("locateBtn");
@@ -599,6 +618,7 @@ let surveyMapRendered = false;
 let surveyPolePoints = [];
 let forcedMapPoleId = null;
 let manualMapLinks = [];
+let blockedAutoMapLinks = [];
 let pendingLinkPoleId = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
@@ -612,6 +632,7 @@ window.AE_DATA = [];
 locateBtn.addEventListener("click", locate);
 loadStoredSpanData();
 loadStoredManualMapLinks();
+loadStoredBlockedAutoMapLinks();
 loadBundledAEData();
 
 function setBusy(isBusy, text){
@@ -699,6 +720,10 @@ function initSurveyMap(attempts=0){
   if(!mapEl) return;
 
   surveyMap = L.map(mapEl, {
+    rotate:true,
+    rotateControl:false,
+    touchRotate:true,
+    bearing:0,
     zoomControl:false,
     attributionControl:true,
     tap:true,
@@ -738,6 +763,7 @@ function initSurveyMap(attempts=0){
   surveyPoleLayer = L.layerGroup().addTo(surveyMap);
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   surveyMap.on("zoomend moveend", () => refreshSurveyPoleMarkers());
+  surveyMap.on("rotate", () => updateSurveyMapRotationButton());
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
   renderSurveyMap(true);
@@ -771,6 +797,44 @@ function updateBaseMapButtons(){
     const button = document.getElementById(id);
     if(button) button.textContent = label;
   }
+}
+
+function rotateSurveyMap(delta){
+  if(!surveyMap) initSurveyMap();
+  if(!surveyMap) return;
+  const current = getSurveyMapBearing();
+  setSurveyMapBearing(current + delta);
+}
+
+function resetSurveyMapRotation(){
+  setSurveyMapBearing(0);
+}
+
+function getSurveyMapBearing(){
+  if(!surveyMap) return 0;
+  if(typeof surveyMap.getBearing === "function"){
+    const bearing = Number(surveyMap.getBearing());
+    return Number.isFinite(bearing) ? bearing : 0;
+  }
+  return Number(surveyMap._bearing || 0) || 0;
+}
+
+function setSurveyMapBearing(bearing){
+  if(!surveyMap) return;
+  const next = ((bearing % 360) + 360) % 360;
+  if(typeof surveyMap.setBearing !== "function"){
+    setSurveyMapStatus("Map rotation could not load. Check signal, then refresh.");
+    return;
+  }
+  surveyMap.setBearing(next);
+  updateSurveyMapRotationButton();
+}
+
+function updateSurveyMapRotationButton(){
+  const button = document.getElementById("mapNorthBtn");
+  if(!button) return;
+  const bearing = Math.round(getSurveyMapBearing());
+  button.textContent = bearing ? `${bearing} deg` : "North";
 }
 
 function searchMapSpan(event){
@@ -1216,18 +1280,37 @@ function renderSurveyLineRuns(points){
   }
 
   for(const group of groups.values()){
-    const ordered = group
-      .filter((point) => Number.isFinite(point.number))
-      .sort((a, b) => a.number - b.number || String(a.suffix).localeCompare(String(b.suffix)));
+    const numbered = group
+      .filter((point) => Number.isFinite(point.number));
+    const mainPoles = numbered
+      .filter((point) => !point.suffix)
+      .sort((a, b) => a.number - b.number);
+    const mainByNumber = new Map(mainPoles.map((point) => [point.number, point]));
 
-    for(let i = 0; i < ordered.length - 1; i++){
-      const a = ordered[i];
-      const b = ordered[i + 1];
+    for(let i = 0; i < mainPoles.length - 1; i++){
+      const a = mainPoles[i];
+      const b = mainPoles[i + 1];
       const distanceM = haversineKm(a.lat, a.lon, b.lat, b.lon) * 1000;
       const hasMissingPole = Number.isFinite(a.number) && Number.isFinite(b.number) && Math.abs(b.number - a.number) > 1;
-      drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], hasMissingPole || distanceM > 250);
+      drawSurveyAutoNetworkLine(a, b, hasMissingPole || distanceM > 250);
+    }
+
+    const spurPoles = numbered
+      .filter((point) => point.suffix)
+      .sort((a, b) => a.number - b.number || String(a.suffix).localeCompare(String(b.suffix)));
+
+    for(const spur of spurPoles){
+      const base = mainByNumber.get(spur.number);
+      if(!base) continue;
+      drawSurveyAutoNetworkLine(base, spur, false);
     }
   }
+}
+
+function drawSurveyAutoNetworkLine(a, b, isGap=false){
+  const autoLinkId = mapLinkKey(a.span.mapPoleId, b.span.mapPoleId);
+  if(blockedAutoMapLinks.includes(autoLinkId)) return;
+  drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId);
 }
 
 function renderManualMapLinks(){
@@ -1240,11 +1323,11 @@ function renderManualMapLinks(){
   for(const link of manualMapLinks){
     const a = pointsById.get(link.a);
     const b = pointsById.get(link.b);
-    drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], false, link.id);
+    drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], false, link.id, null);
   }
 }
 
-function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null){
+function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null, autoLinkId=null){
   L.polyline(latlngs, {
     color:"#f7fbff",
     weight:8,
@@ -1263,9 +1346,15 @@ function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null){
 
   if(manualLinkId){
     line.on("click", (event) => {
-      if(mapTool !== "delete") return;
+      if(mapTool !== "delete" && mapTool !== "unlink") return;
       L.DomEvent.stop(event.originalEvent || event);
       removeManualMapLink(manualLinkId);
+    });
+  }else if(autoLinkId){
+    line.on("click", (event) => {
+      if(mapTool !== "unlink") return;
+      L.DomEvent.stop(event.originalEvent || event);
+      blockAutoMapLink(autoLinkId);
     });
   }
 }
@@ -1481,7 +1570,9 @@ function removeMapPole(mapPoleId){
   spans.splice(index, 1);
   if(forcedMapPoleId === mapPoleId) forcedMapPoleId = null;
   manualMapLinks = manualMapLinks.filter((link) => link.a !== mapPoleId && link.b !== mapPoleId);
+  blockedAutoMapLinks = blockedAutoMapLinks.filter((key) => !String(key).split("|").includes(mapPoleId));
   persistManualMapLinks();
+  persistBlockedAutoMapLinks();
   persistSpanData();
   renderSurveyMap(false);
   setMapTool("pan", true);
@@ -1536,12 +1627,33 @@ function removeManualMapLink(linkId){
   setSurveyMapStatus("Manual pole link removed.");
 }
 
+function blockAutoMapLink(autoLinkId){
+  if(!blockedAutoMapLinks.includes(autoLinkId)){
+    blockedAutoMapLinks.push(autoLinkId);
+    persistBlockedAutoMapLinks();
+  }
+  redrawSurveyLinesOnly();
+  setSurveyMapStatus("Automatic pole link hidden. Use Link to draw the correct connection.");
+}
+
 function persistManualMapLinks(){
   try{
     localStorage.setItem("treeSurveyManualMapLinks", JSON.stringify(manualMapLinks));
   }catch{
     setSurveyMapStatus("Link changed, but this browser could not save it locally.");
   }
+}
+
+function persistBlockedAutoMapLinks(){
+  try{
+    localStorage.setItem("treeSurveyBlockedAutoMapLinks", JSON.stringify(blockedAutoMapLinks));
+  }catch{
+    setSurveyMapStatus("Auto link hidden, but this browser could not save it locally.");
+  }
+}
+
+function mapLinkKey(a, b){
+  return [a, b].map(String).sort().join("|");
 }
 
 function createId(prefix){
@@ -1555,7 +1667,7 @@ function setMapTool(tool, force=false){
   mapTool = tool;
   if(tool !== "link") pendingLinkPoleId = null;
   updateMapMovementForTool();
-  for(const id of ["pan","pole","tree","group","link","route","label","delete"]){
+  for(const id of ["pan","pole","tree","group","link","unlink","route","label","delete"]){
     const button = document.getElementById(`tool-${id}`);
     if(button) button.classList.toggle("active", id === tool);
   }
@@ -1565,6 +1677,7 @@ function setMapTool(tool, force=false){
     tree:"Tap once to place a single tree circle.",
     group:"Draw around the group. The app will tidy it into the closest shape.",
     link:"Tap one pole, then tap the pole it should link to.",
+    unlink:"Tap a blue line to remove a manual link or hide an automatic one.",
     route:"Tap along the access route. Press Finish route when done.",
     label:"Tap the map, then type a label.",
     delete:"Tap a drawn mark, manual link, or pole to remove it."
@@ -2120,6 +2233,19 @@ function loadStoredManualMapLinks(){
   }
 }
 
+function loadStoredBlockedAutoMapLinks(){
+  try{
+    const stored = localStorage.getItem("treeSurveyBlockedAutoMapLinks");
+    if(!stored) return;
+    const links = JSON.parse(stored);
+    blockedAutoMapLinks = Array.isArray(links)
+      ? links.filter(Boolean).map(String)
+      : [];
+  }catch{
+    blockedAutoMapLinks = [];
+  }
+}
+
 function updateSpanDataStatus(message=""){
   const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
   spanDataStatus.textContent = message || (count
@@ -2170,8 +2296,10 @@ async function importSpanFiles(){
 function clearSpanData(){
   localStorage.removeItem("treeSurveySpanData");
   localStorage.removeItem("treeSurveyManualMapLinks");
+  localStorage.removeItem("treeSurveyBlockedAutoMapLinks");
   window.SPAN_DATA = [];
   manualMapLinks = [];
+  blockedAutoMapLinks = [];
   pendingLinkPoleId = null;
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
