@@ -4,29 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tree Survey Locator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
 :root{
-  --forest:#102219;
-  --panel:#172d22;
-  --leaf:#3f7d51;
-  --amber:#d99a18;
-  --cream:#f3eddf;
-  --muted:#a8bba8;
-  --line:rgba(255,255,255,.14);
-  --danger:#d96a5f;
+  --forest:#123326;
+  --panel:#ffffff;
+  --panel-soft:#f7faf7;
+  --leaf:#18764a;
+  --leaf-dark:#0f5637;
+  --amber:#d89a1c;
+  --cream:#f8faf7;
+  --ink:#15221b;
+  --muted:#65746b;
+  --line:rgba(21,34,27,.13);
+  --danger:#c64e40;
+  --shadow:0 16px 42px rgba(20,43,31,.13);
 }
 *{box-sizing:border-box}
 body{
   margin:0;
   min-height:100vh;
-  background:linear-gradient(180deg,#102219 0%,#07120d 100%);
-  color:var(--cream);
-  font-family:Georgia,"Times New Roman",serif;
+  background:
+    radial-gradient(circle at top left, rgba(24,118,74,.13), transparent 34rem),
+    linear-gradient(180deg,#f3f7f3 0%,#e8f0ea 100%);
+  color:var(--ink);
+  font-family:Inter,Arial,sans-serif;
 }
 header{
-  padding:18px 16px;
-  border-bottom:1px solid var(--line);
+  padding:18px 16px 18px 108px;
+  border-bottom:1px solid rgba(255,255,255,.12);
+  background:linear-gradient(135deg,#123326,#0e261d);
+  color:var(--cream);
+  box-shadow:0 10px 28px rgba(11,31,22,.16);
 }
 body.map-mode{
   position:fixed;
@@ -49,11 +61,39 @@ body.map-mode main{
   max-width:none;
 }
 h1,h2,p{margin:0}
-h1{font-size:22px}
+h1{
+  font-size:22px;
+  letter-spacing:-.01em;
+}
+header p{
+  margin-top:4px;
+  color:rgba(248,250,247,.72);
+  font-size:13px;
+  font-weight:600;
+}
 main{
   width:min(100%,980px);
   margin:auto;
   padding:18px 14px 34px;
+}
+.view-switch-fab{
+  position:fixed;
+  top:10px;
+  left:10px;
+  z-index:920;
+  min-height:38px;
+  min-width:78px;
+  border:1px solid rgba(24,118,74,.34);
+  border-radius:999px;
+  background:var(--leaf);
+  color:#fff;
+  font:800 13px Inter,Arial,sans-serif;
+  box-shadow:0 8px 24px rgba(20,43,31,.18);
+  cursor:pointer;
+}
+body.map-mode .view-switch-fab{
+  top:10px;
+  left:10px;
 }
 .tabs{
   display:grid;
@@ -65,15 +105,16 @@ main{
   min-height:42px;
   border:1px solid var(--line);
   border-radius:8px;
-  background:rgba(255,255,255,.06);
-  color:var(--cream);
-  font:700 14px Arial,sans-serif;
+  background:rgba(255,255,255,.72);
+  color:var(--ink);
+  font:700 14px Inter,Arial,sans-serif;
   cursor:pointer;
+  box-shadow:0 4px 12px rgba(20,43,31,.06);
 }
 .tab-btn.active{
-  border-color:var(--amber);
-  background:var(--amber);
-  color:#191204;
+  border-color:rgba(24,118,74,.32);
+  background:var(--leaf);
+  color:#fff;
 }
 .view{
   display:block;
@@ -98,8 +139,8 @@ body.map-mode .map-controls{
   bottom:12px;
   margin:0;
   padding:10px;
-  background:rgba(16,34,25,.9);
-  box-shadow:0 16px 42px rgba(0,0,0,.28);
+  background:rgba(255,255,255,.92);
+  box-shadow:var(--shadow);
   backdrop-filter:blur(7px);
 }
 body.map-mode .map-top-left,
@@ -109,12 +150,12 @@ body.map-mode .map-search{
   z-index:850;
   margin:0;
   padding:8px;
-  background:rgba(16,34,25,.88);
-  box-shadow:0 10px 26px rgba(0,0,0,.24);
+  background:rgba(255,255,255,.92);
+  box-shadow:var(--shadow);
   backdrop-filter:blur(7px);
 }
 body.map-mode .map-top-left{
-  top:10px;
+  top:60px;
   left:10px;
   width:min(210px,45vw);
 }
@@ -159,19 +200,19 @@ body.map-mode .map-canvas-card{
   width:138px;
   height:138px;
   border-radius:50%;
-  border:2px solid var(--amber);
-  background:var(--leaf);
-  color:var(--cream);
+  border:5px solid rgba(255,255,255,.72);
+  background:linear-gradient(145deg,var(--leaf),var(--leaf-dark));
+  color:#fff;
   font-size:26px;
   font-weight:700;
   cursor:pointer;
-  box-shadow:0 20px 45px rgba(0,0,0,.32);
+  box-shadow:0 22px 52px rgba(13,70,43,.28);
 }
 #locateBtn:disabled{opacity:.75;cursor:wait}
 #status{
   min-height:24px;
-  color:var(--amber);
-  font-family:Arial,sans-serif;
+  color:var(--leaf-dark);
+  font-family:Inter,Arial,sans-serif;
   font-size:13px;
   font-weight:700;
   letter-spacing:1.6px;
@@ -184,26 +225,39 @@ body.map-mode .map-canvas-card{
 .card{
   border:1px solid var(--line);
   border-radius:8px;
-  background:rgba(255,255,255,.045);
+  background:rgba(255,255,255,.86);
   padding:15px;
+  box-shadow:0 8px 24px rgba(20,43,31,.08);
 }
 .card h2{
   margin-bottom:7px;
-  color:var(--amber);
-  font-family:Arial,sans-serif;
+  color:var(--leaf-dark);
+  font-family:Inter,Arial,sans-serif;
   font-size:12px;
   letter-spacing:1.2px;
   text-transform:uppercase;
+}
+.span-match-card{
+  cursor:pointer;
+}
+.span-match-card:active{
+  transform:translateY(1px);
+}
+.span-match-card:focus-visible{
+  outline:3px solid rgba(24,118,74,.35);
+  outline-offset:2px;
 }
 .value{
   font-size:22px;
   line-height:1.28;
   overflow-wrap:anywhere;
+  font-weight:750;
+  letter-spacing:-.01em;
 }
 .detail{
   margin-top:6px;
   color:var(--muted);
-  font-family:Arial,sans-serif;
+  font-family:Inter,Arial,sans-serif;
   font-size:14px;
   line-height:1.35;
 }
@@ -217,29 +271,30 @@ button.small,a.small{
   min-height:40px;
   border:1px solid var(--line);
   border-radius:8px;
-  background:rgba(255,255,255,.07);
-  color:var(--cream);
+  background:#fff;
+  color:var(--ink);
   display:flex;
   align-items:center;
   justify-content:center;
   padding:8px 10px;
   text-decoration:none;
-  font:700 14px Arial,sans-serif;
+  font:700 14px Inter,Arial,sans-serif;
   cursor:pointer;
+  box-shadow:0 3px 10px rgba(20,43,31,.06);
 }
 input.text-field,textarea.text-field{
   width:100%;
   border:1px solid var(--line);
   border-radius:8px;
-  background:rgba(255,255,255,.07);
-  color:var(--cream);
+  background:#fff;
+  color:var(--ink);
   padding:10px;
-  font:16px Arial,sans-serif;
+  font:16px Inter,Arial,sans-serif;
 }
 input.file-field{
   width:100%;
-  color:var(--cream);
-  font:14px Arial,sans-serif;
+  color:var(--ink);
+  font:14px Inter,Arial,sans-serif;
 }
 textarea.text-field{
   min-height:118px;
@@ -306,12 +361,18 @@ body.map-mode #surveyMap{
   border-radius:0;
 }
 .leaflet-container{
-  font-family:Arial,sans-serif;
+  font-family:Inter,Arial,sans-serif;
   touch-action:none;
 }
 .leaflet-control,
 .leaflet-control *{
   touch-action:manipulation;
+}
+.survey-line-canvas{
+  position:absolute;
+  inset:0;
+  z-index:430;
+  pointer-events:none;
 }
 .map-toolbar,
 .map-actions,
@@ -321,7 +382,7 @@ body.map-mode #surveyMap{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(8,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(9,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -353,12 +414,12 @@ body.map-mode #surveyMap{
   font-size:12px;
 }
 .map-toolbar .small.active{
-  border-color:var(--amber);
-  background:var(--amber);
-  color:#191204;
+  border-color:var(--leaf);
+  background:var(--leaf);
+  color:#fff;
 }
 .edit-action{
-  border-color:rgba(217,154,24,.72);
+  border-color:rgba(24,118,74,.48);
 }
 .draw-tools{display:none}
 #mapView.map-locked .frame-tools{display:none}
@@ -381,7 +442,7 @@ body.map-mode #surveyMap{
   height:34px;
   place-items:center;
   color:#111;
-  font:700 24px Arial,sans-serif;
+  font:800 24px Inter,Arial,sans-serif;
   text-shadow:0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
 }
 .pole-label{
@@ -391,16 +452,16 @@ body.map-mode #surveyMap{
   white-space:nowrap;
 }
 .survey-pole-dot{
-  width:18px;
-  height:18px;
-  border:3px solid #1d4ed8;
+  width:14px;
+  height:14px;
+  border:0;
   border-radius:50%;
-  background:#fff;
+  background:var(--pole-color,#1d4ed8);
   box-shadow:0 1px 4px rgba(0,0,0,.35);
 }
 .pole-popup{
   min-width:150px;
-  font-family:Arial,sans-serif;
+  font-family:Inter,Arial,sans-serif;
   line-height:1.35;
 }
 .pole-popup-line{
@@ -429,7 +490,7 @@ body.map-mode #surveyMap{
 }
 .text-label{
   color:#111;
-  font:700 17px Arial,sans-serif;
+  font:700 17px Inter,Arial,sans-serif;
   text-shadow:0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
   white-space:nowrap;
 }
@@ -443,19 +504,19 @@ body.map-mode #surveyMap{
   min-width:110px;
 }
 a.primary,button.primary{
-  border-color:var(--amber);
-  background:var(--amber);
-  color:#191204;
+  border-color:var(--leaf);
+  background:var(--leaf);
+  color:#fff;
 }
-.danger{border-color:rgba(217,106,95,.7)}
+.danger{border-color:rgba(198,78,64,.58);color:#9d3328}
 .hidden{display:none}
 .asset-line{
   margin-top:5px;
-  font-family:Arial,sans-serif;
+  font-family:Inter,Arial,sans-serif;
   font-size:14px;
   line-height:1.38;
 }
-.asset-line strong{color:var(--cream)}
+.asset-line strong{color:var(--ink)}
 @media(max-width:520px){
   .actions{grid-template-columns:1fr}
   .search-form{grid-template-columns:1fr}
@@ -474,7 +535,9 @@ a.primary,button.primary{
     width:auto;
     transform:none;
   }
-  body.map-mode .map-top-left,
+  body.map-mode .map-top-left{
+    top:58px;
+  }
   body.map-mode .map-top-right{
     top:8px;
   }
@@ -490,7 +553,10 @@ a.primary,button.primary{
 <body>
 <header>
   <h1>Tree Survey Locator</h1>
+  <p>Field mapping, span lookup and survey copy helper</p>
 </header>
+
+<button class="view-switch-fab" id="viewSwitchBtn" type="button" onclick="toggleAppView()">Map</button>
 
 <main>
   <nav class="tabs" aria-label="App views">
@@ -533,7 +599,6 @@ a.primary,button.primary{
     <section class="card map-top-left">
       <div class="frame-actions">
         <button class="small primary" id="mapLockToggleBtn" type="button" onclick="toggleSurveyLock()">Lock map</button>
-        <button class="small" type="button" onclick="switchView('locator')">Locator</button>
       </div>
     </section>
 
@@ -542,9 +607,9 @@ a.primary,button.primary{
         <button class="small" id="baseMapToggleBtn" type="button" onclick="toggleSurveyBaseMap()">Satellite</button>
       </div>
       <div class="map-rotation-actions">
-        <button class="small" type="button" onclick="rotateSurveyMap(-15)">Left</button>
+        <button class="small" id="mapRotateLeftBtn" type="button" onclick="rotateSurveyMap(-15)">Left</button>
         <button class="small" id="mapNorthBtn" type="button" onclick="resetSurveyMapRotation()">North</button>
-        <button class="small" type="button" onclick="rotateSurveyMap(15)">Right</button>
+        <button class="small" id="mapRotateRightBtn" type="button" onclick="rotateSurveyMap(15)">Right</button>
       </div>
     </section>
 
@@ -567,6 +632,7 @@ a.primary,button.primary{
         <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')">Unlink</button>
         <button class="small" id="tool-label" type="button" onclick="setMapTool('label')">Label</button>
         <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')">Delete</button>
+        <button class="small" type="button" onclick="undoMapDrawing()">Undo</button>
         <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()">Screenshot</button>
       </div>
     </section>
@@ -593,6 +659,7 @@ const locatorView = document.getElementById("locatorView");
 const mapView = document.getElementById("mapView");
 const locatorTab = document.getElementById("locatorTab");
 const mapTab = document.getElementById("mapTab");
+const viewSwitchBtn = document.getElementById("viewSwitchBtn");
 const surveyMapStatus = document.getElementById("surveyMapStatus");
 const surveyMapStage = document.getElementById("surveyMapStage");
 const mapSpanSearchInput = document.getElementById("mapSpanSearchInput");
@@ -608,6 +675,10 @@ let surveySatelliteLayer = null;
 let surveyIsSatellite = false;
 let surveyPoleLayer = null;
 let surveyLineLayer = null;
+let surveyLineCanvas = null;
+let surveyLineCanvasCtx = null;
+let surveyLineShapes = [];
+let surveyLineCanvasSize = { width:0, height:0, ratio:0 };
 let surveyDrawingLayer = null;
 let surveyPoleBounds = null;
 let mapTool = "pan";
@@ -692,16 +763,32 @@ function switchView(view){
   mapView.classList.toggle("hidden", !showMap);
   locatorTab.classList.toggle("active", !showMap);
   mapTab.classList.toggle("active", showMap);
+  updateViewSwitchButton(showMap);
 
   if(showMap){
     initSurveyMap();
     setTimeout(() => {
       if(surveyMap){
         surveyMap.invalidateSize();
-        renderSurveyMap(true);
+        const selectedSpan = currentReport?.nearestSpan;
+        if(selectedSpan && getSpanMapPosition(selectedSpan)){
+          focusMapOnSpan(selectedSpan);
+        }else{
+          renderSurveyMap(true);
+        }
       }
     }, 100);
   }
+}
+
+function toggleAppView(){
+  switchView(document.body.classList.contains("map-mode") ? "locator" : "map");
+}
+
+function updateViewSwitchButton(showMap=document.body.classList.contains("map-mode")){
+  if(!viewSwitchBtn) return;
+  viewSwitchBtn.textContent = showMap ? "Locator" : "Map";
+  viewSwitchBtn.title = showMap ? "Return to locator view" : "Open map view";
 }
 
 function initSurveyMap(attempts=0){
@@ -737,7 +824,7 @@ function initSurveyMap(attempts=0){
     fadeAnimation:false,
     markerZoomAnimation:false,
     bounceAtZoomLimits:false,
-    preferCanvas:true,
+    preferCanvas:false,
     zoomSnap:0.25,
     zoomDelta:0.25,
     maxBoundsViscosity:1.0
@@ -764,9 +851,16 @@ function initSurveyMap(attempts=0){
   surveyLineLayer = L.layerGroup().addTo(surveyMap);
   surveyPoleLayer = L.layerGroup().addTo(surveyMap);
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
-  surveyMap.on("zoomend moveend", () => refreshSurveyPoleMarkers());
+  installSurveyLineCanvas(mapEl);
+  surveyMap.on("zoom move rotate resize", () => drawSurveyLineCanvas());
+  surveyMap.on("zoomend moveend", () => {
+    drawSurveyLineCanvas();
+    refreshSurveyPoleMarkers();
+  });
   surveyMap.on("rotate", () => {
     updateSurveyMapRotationButton();
+  });
+  surveyMap.on("rotateend", () => {
     scheduleSurveyLineRedrawAfterRotate();
   });
   installSurveyTouchHandlers(mapEl);
@@ -807,11 +901,19 @@ function updateBaseMapButtons(){
 function rotateSurveyMap(delta){
   if(!surveyMap) initSurveyMap();
   if(!surveyMap) return;
+  if(mapLocked){
+    setSurveyMapStatus("Rotation is locked. Unlock the map to turn the frame.");
+    return;
+  }
   const current = getSurveyMapBearing();
   setSurveyMapBearing(current + delta);
 }
 
 function resetSurveyMapRotation(){
+  if(mapLocked){
+    setSurveyMapStatus("Rotation is locked. Unlock the map to turn the frame.");
+    return;
+  }
   setSurveyMapBearing(0);
 }
 
@@ -837,26 +939,28 @@ function setSurveyMapBearing(bearing){
 }
 
 function updateSurveyMapRotationButton(){
-  const button = document.getElementById("mapNorthBtn");
-  if(!button) return;
   const bearing = Math.round(getSurveyMapBearing());
-  button.textContent = bearing ? `${bearing} deg` : "North";
+  const northButton = document.getElementById("mapNorthBtn");
+  if(northButton) northButton.textContent = bearing ? `${bearing} deg` : "North";
+  for(const id of ["mapRotateLeftBtn","mapNorthBtn","mapRotateRightBtn"]){
+    const button = document.getElementById(id);
+    if(!button) continue;
+    button.disabled = mapLocked;
+    button.title = mapLocked ? "Unlock the map to rotate it" : "";
+  }
 }
 
 function scheduleSurveyLineRedrawAfterRotate(){
   window.clearTimeout(rotateRedrawTimer);
   rotateRedrawTimer = window.setTimeout(() => {
     if(!surveyMapRendered) return;
-    redrawSurveyLinesOnly();
+    drawSurveyLineCanvas();
     refreshSurveyPoleMarkers();
-  }, 120);
+  }, 180);
 }
 
 function searchMapSpan(event){
   event.preventDefault();
-  if(!surveyMap) initSurveyMap();
-  if(!surveyMapRendered) renderSurveyMap(false);
-
   const query = mapSpanSearchInput?.value.trim() || "";
   if(!query){
     setSurveyMapStatus("Type a span or pole name to zoom the map to it.");
@@ -865,6 +969,14 @@ function searchMapSpan(event){
 
   const matches = findSpanMatches(query, 1);
   const span = matches[0];
+  focusMapOnSpan(span, { query });
+}
+
+function focusMapOnSpan(span, options={}){
+  if(!surveyMap) initSurveyMap();
+  if(!surveyMapRendered) renderSurveyMap(false);
+
+  const query = options.query || poleDisplayName(span || {}) || "that span";
   const position = getSpanMapPosition(span);
   if(!span || !position){
     setSurveyMapStatus(`No plottable map result found for "${query}".`);
@@ -873,8 +985,10 @@ function searchMapSpan(event){
 
   if(mapLocked) unlockSurveyFrame(false);
   forcedMapPoleId = span.mapPoleId || null;
+  if(mapSpanSearchInput) mapSpanSearchInput.value = poleDisplayName(span);
   const zoom = Math.max(surveyMap.getZoom() || 0, 18);
   surveyMap.setView([position.lat, position.lon], zoom, { animate:false });
+  drawSurveyLineCanvas();
   refreshSurveyPoleMarkers(forcedMapPoleId);
 
   const point = surveyPolePoints.find((item) => item.span === span || item.span?.mapPoleId === span.mapPoleId);
@@ -930,11 +1044,24 @@ function installSurveyTouchHandlers(mapEl){
   let pointTap = null;
   const editPointers = new Map();
   let editGesture = null;
+  let selectedDrawingLastTapAt = 0;
 
   mapEl.addEventListener("pointerdown", (event) => {
-    if(selectedDrawing && mapLocked && mapTool === "pan"){
+    if(editGesture && selectedDrawing && mapLocked && mapTool === "pan"){
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      mapEl.setPointerCapture?.(event.pointerId);
+      editPointers.set(event.pointerId, pointerEventPoint(event));
+      editGesture.last = gestureInfo([...editPointers.values()]);
+      disableSurveyMapMovement();
+      return;
+    }
+
+    if(selectedDrawing && mapLocked && mapTool === "pan" && isDrawingDomTarget(event.target)){
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
       mapEl.setPointerCapture?.(event.pointerId);
       editPointers.set(event.pointerId, pointerEventPoint(event));
       editGesture = {
@@ -942,14 +1069,14 @@ function installSurveyTouchHandlers(mapEl){
         moved:false,
         startedOnDrawing:isDrawingDomTarget(event.target)
       };
-      surveyMap.dragging.disable();
-      surveyMap.touchZoom.disable();
+      disableSurveyMapMovement();
       return;
     }
 
     if(surveyMap && mapLocked && isPointMapTool() && !isLeafletControlTarget(event.target)){
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
       mapEl.setPointerCapture?.(event.pointerId);
       pointTap = {
         id:event.pointerId,
@@ -963,6 +1090,7 @@ function installSurveyTouchHandlers(mapEl){
     if(!surveyMap || !mapLocked || mapTool !== "group") return;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation?.();
     mapEl.setPointerCapture?.(event.pointerId);
     strokeStarted = true;
     strokeMoved = false;
@@ -974,7 +1102,7 @@ function installSurveyTouchHandlers(mapEl){
       dashArray:"8 6",
       interactive:false
     }).addTo(surveyDrawingLayer);
-  }, { passive:false });
+  }, { passive:false, capture:true });
 
   mapEl.addEventListener("pointermove", (event) => {
     if(pointTap && pointTap.id === event.pointerId){
@@ -985,6 +1113,7 @@ function installSurveyTouchHandlers(mapEl){
     if(editPointers.has(event.pointerId) && editGesture){
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
       editPointers.set(event.pointerId, pointerEventPoint(event));
       const current = gestureInfo([...editPointers.values()]);
       if(!current || !editGesture.last) return;
@@ -1016,16 +1145,18 @@ function installSurveyTouchHandlers(mapEl){
     if(!strokeStarted || !surveyMap) return;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation?.();
     strokePoints.push(surveyMap.containerPointToLatLng(L.point(event.clientX, event.clientY)));
     strokeMoved = strokeMoved || strokePoints.length > 3;
     if(activeStrokePreview) activeStrokePreview.setLatLngs(strokePoints);
-  }, { passive:false });
+  }, { passive:false, capture:true });
 
   for(const eventName of ["pointerup","pointercancel"]){
     mapEl.addEventListener(eventName, (event) => {
       if(pointTap && pointTap.id === event.pointerId){
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation?.();
         suppressClick = true;
         applySurveyMapTool(pointTap.latlng);
         pointTap = null;
@@ -1038,15 +1169,25 @@ function installSurveyTouchHandlers(mapEl){
       if(editPointers.has(event.pointerId)){
         event.preventDefault();
         event.stopPropagation();
+        event.stopImmediatePropagation?.();
         mapEl.releasePointerCapture?.(event.pointerId);
         editPointers.delete(event.pointerId);
         if(editGesture && !editGesture.moved && !editGesture.startedOnDrawing){
           selectDrawing(null);
           setSurveyMapStatus("Mark deselected.");
+        }else if(editGesture && !editGesture.moved && editGesture.startedOnDrawing && selectedDrawing){
+          const now = Date.now();
+          if(now - selectedDrawingLastTapAt < 380){
+            renameDrawingItem(selectedDrawing);
+            selectedDrawingLastTapAt = 0;
+          }else{
+            selectedDrawingLastTapAt = now;
+            setSurveyMapStatus(`${selectedDrawing.text} selected. Double tap to rename, drag to move, pinch to resize.`);
+          }
         }
         if(!editPointers.size){
           editGesture = null;
-          enableSurveyMapMovement();
+          syncMapMovementState();
         }else{
           editGesture.last = gestureInfo([...editPointers.values()]);
         }
@@ -1056,6 +1197,7 @@ function installSurveyTouchHandlers(mapEl){
       if(!strokeStarted) return;
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation?.();
       mapEl.releasePointerCapture?.(event.pointerId);
       strokeStarted = false;
       suppressClick = true;
@@ -1069,7 +1211,7 @@ function installSurveyTouchHandlers(mapEl){
       setTimeout(() => {
         suppressClick = false;
       }, 650);
-    }, { passive:false });
+    }, { passive:false, capture:true });
   }
 
   surveyMap.on("click", (event) => {
@@ -1086,6 +1228,8 @@ function renderSurveyMap(fitAfterRender=true){
   surveyPolePoints = points;
   surveyPoleLayer.clearLayers();
   surveyLineLayer.clearLayers();
+  surveyLineShapes = [];
+  clearSurveyLineCanvas();
   surveyPoleBounds = null;
   surveyMapRendered = false;
 
@@ -1105,9 +1249,10 @@ function renderSurveyMap(fitAfterRender=true){
   surveyPoleBounds = L.latLngBounds(bounds);
   surveyMapRendered = true;
   if(fitAfterRender) fitSurveyMap();
+  drawSurveyLineCanvas();
   refreshSurveyPoleMarkers();
   setSurveyMapStage(mapLocked ? "Drawing tools" : "Frame the span");
-  setSurveyMapStatus(`${points.length} poles plotted automatically. Drag poles if any point needs correcting, then lock the map.`);
+  setSurveyMapStatus(`${points.length} poles plotted. Links are inferred from pole names or nearest distance; use Link and Unlink to correct the map.`);
 }
 
 function fitSurveyMap(){
@@ -1193,9 +1338,9 @@ function renderSurveyPole(point, showLabel=false){
     title:point.label,
     icon:L.divIcon({
       className:"",
-      html:`<div class="survey-pole-dot"></div>`,
-      iconSize:[18,18],
-      iconAnchor:[9,9]
+      html:`<div class="survey-pole-dot" style="--pole-color:${lineColorForPoints(point)}"></div>`,
+      iconSize:[14,14],
+      iconAnchor:[7,7]
     })
   }).addTo(surveyPoleLayer);
 
@@ -1302,6 +1447,11 @@ function renderSurveyLineRuns(points){
   for(const group of groups.values()){
     const numbered = group
       .filter((point) => Number.isFinite(point.number));
+    if(shouldUseDistanceNetwork(group, numbered)){
+      drawDistanceNetworkLinks(group);
+      continue;
+    }
+
     const mainPoles = numbered
       .filter((point) => !point.suffix)
       .sort((a, b) => a.number - b.number);
@@ -1338,6 +1488,41 @@ function renderSurveyLineRuns(points){
   }
 }
 
+function shouldUseDistanceNetwork(group, numbered){
+  if(group.length < 2) return false;
+  const alphaCount = numbered.filter((point) => point.prefix && point.prefix !== "UNKNOWN").length;
+  return alphaCount < 2;
+}
+
+function drawDistanceNetworkLinks(points){
+  const candidates = points
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lon));
+  if(candidates.length < 2) return;
+
+  const connected = new Set([candidates[0].span.mapPoleId]);
+  const remaining = new Set(candidates.slice(1).map((point) => point.span.mapPoleId));
+  const byId = new Map(candidates.map((point) => [point.span.mapPoleId, point]));
+
+  while(remaining.size){
+    let best = null;
+    for(const fromId of connected){
+      const from = byId.get(fromId);
+      for(const toId of remaining){
+        const to = byId.get(toId);
+        const distanceM = haversineKm(from.lat, from.lon, to.lat, to.lon) * 1000;
+        if(!best || distanceM < best.distanceM){
+          best = { from, to, distanceM };
+        }
+      }
+    }
+
+    if(!best) break;
+    drawSurveyAutoNetworkLine(best.from, best.to, best.distanceM > 180);
+    connected.add(best.to.span.mapPoleId);
+    remaining.delete(best.to.span.mapPoleId);
+  }
+}
+
 function suffixSortValue(suffix){
   const text = String(suffix || "").toUpperCase();
   let value = 0;
@@ -1352,7 +1537,7 @@ function suffixSortValue(suffix){
 function drawSurveyAutoNetworkLine(a, b, isGap=false){
   const autoLinkId = mapLinkKey(a.span.mapPoleId, b.span.mapPoleId);
   if(blockedAutoMapLinks.includes(autoLinkId)) return;
-  drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId);
+  drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId, lineColorForPoints(a, b));
 }
 
 function renderManualMapLinks(){
@@ -1365,47 +1550,133 @@ function renderManualMapLinks(){
   for(const link of manualMapLinks){
     const a = pointsById.get(link.a);
     const b = pointsById.get(link.b);
-    drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], false, link.id, null);
+    drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], false, link.id, null, lineColorForPoints(a, b));
   }
 }
 
-function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null, autoLinkId=null){
-  L.polyline(latlngs, {
-    color:"#f7fbff",
-    weight:8,
-    opacity:0.92,
-    dashArray:isGap ? "1 14" : null,
-    lineCap:"round"
-  }).addTo(surveyLineLayer);
+function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null, autoLinkId=null, lineColor="#2648d8"){
+  surveyLineShapes.push({
+    latlngs:latlngs.map((point) => L.latLng(point[0], point[1])),
+    isGap,
+    manualLinkId,
+    autoLinkId,
+    lineColor
+  });
+}
 
-  const line = L.polyline(latlngs, {
-    color:"#2648d8",
-    weight:4,
-    opacity:0.95,
-    dashArray:isGap ? "1 14" : null,
-    lineCap:"round"
-  }).addTo(surveyLineLayer);
-
-  if(manualLinkId){
-    line.on("click", (event) => {
-      if(mapTool !== "delete" && mapTool !== "unlink") return;
-      L.DomEvent.stop(event.originalEvent || event);
-      removeManualMapLink(manualLinkId);
-    });
-  }else if(autoLinkId){
-    line.on("click", (event) => {
-      if(mapTool !== "unlink") return;
-      L.DomEvent.stop(event.originalEvent || event);
-      blockAutoMapLink(autoLinkId);
-    });
-  }
+function lineColorForPoints(...points){
+  const hasHv = points.some((point) => normaliseSearchText(point?.span?.voltage || "").startsWith("hv"));
+  return hasHv ? "#d33a2c" : "#2648d8";
 }
 
 function redrawSurveyLinesOnly(){
   if(!surveyLineLayer) return;
   surveyLineLayer.clearLayers();
+  surveyLineShapes = [];
+  clearSurveyLineCanvas();
   renderSurveyLineRuns(surveyPolePoints);
   renderManualMapLinks();
+  drawSurveyLineCanvas();
+}
+
+function refreshSurveyLineDisplay(){
+  drawSurveyLineCanvas();
+}
+
+function installSurveyLineCanvas(mapEl){
+  if(surveyLineCanvas) return;
+  surveyLineCanvas = document.createElement("canvas");
+  surveyLineCanvas.className = "survey-line-canvas";
+  surveyLineCanvas.setAttribute("aria-hidden", "true");
+  mapEl.appendChild(surveyLineCanvas);
+  surveyLineCanvasCtx = surveyLineCanvas.getContext("2d");
+  resizeSurveyLineCanvas();
+}
+
+function resizeSurveyLineCanvas(){
+  if(!surveyLineCanvas || !surveyMap) return;
+  const size = surveyMap.getSize();
+  const ratio = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.round(size.x * ratio));
+  const height = Math.max(1, Math.round(size.y * ratio));
+  surveyLineCanvas.style.width = `${size.x}px`;
+  surveyLineCanvas.style.height = `${size.y}px`;
+  if(surveyLineCanvas.width !== width || surveyLineCanvas.height !== height || surveyLineCanvasSize.ratio !== ratio){
+    surveyLineCanvas.width = width;
+    surveyLineCanvas.height = height;
+    surveyLineCanvasSize = { width, height, ratio };
+  }
+  if(surveyLineCanvasCtx){
+    surveyLineCanvasCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  }
+}
+
+function clearSurveyLineCanvas(){
+  if(!surveyLineCanvasCtx || !surveyLineCanvas || !surveyMap) return;
+  const size = surveyMap.getSize();
+  surveyLineCanvasCtx.clearRect(0, 0, size.x, size.y);
+}
+
+function drawSurveyLineCanvas(){
+  if(!surveyLineCanvasCtx || !surveyMap) return;
+  resizeSurveyLineCanvas();
+  clearSurveyLineCanvas();
+  if(!surveyLineShapes.length) return;
+
+  const ctx = surveyLineCanvasCtx;
+  ctx.save();
+  ctx.lineWidth = 3.5;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.globalAlpha = 0.95;
+
+  for(const line of surveyLineShapes){
+    const points = line.latlngs.map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+    if(points.length < 2) continue;
+    ctx.strokeStyle = line.lineColor || "#2648d8";
+    ctx.setLineDash(line.isGap ? [1, 14] : []);
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for(let i = 1; i < points.length; i++){
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function handleCanvasLineClick(containerPoint){
+  if(!["unlink","delete"].includes(mapTool) || !surveyLineShapes.length) return false;
+  const point = { x:containerPoint.x, y:containerPoint.y };
+  for(let i = surveyLineShapes.length - 1; i >= 0; i--){
+    const line = surveyLineShapes[i];
+    const points = line.latlngs.map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+    if(points.length < 2) continue;
+    for(let p = 0; p < points.length - 1; p++){
+      if(pointToSegmentDistance(point, points[p], points[p + 1]) <= 14){
+        if(line.manualLinkId){
+          removeManualMapLink(line.manualLinkId);
+          return true;
+        }
+        if(line.autoLinkId && mapTool === "unlink"){
+          blockAutoMapLink(line.autoLinkId);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+function pointToSegmentDistance(point, a, b){
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if(dx === 0 && dy === 0) return Math.hypot(point.x - a.x, point.y - a.y);
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
+  const x = a.x + t * dx;
+  const y = a.y + t * dy;
+  return Math.hypot(point.x - x, point.y - y);
 }
 
 function toggleSurveyLock(){
@@ -1418,6 +1689,7 @@ function updateLockButton(){
   if(!button) return;
   button.textContent = mapLocked ? "Unlock map" : "Lock map";
   button.classList.toggle("primary", !mapLocked);
+  updateSurveyMapRotationButton();
 }
 
 function lockSurveyFrame(){
@@ -1459,6 +1731,7 @@ function disableSurveyMapMovement(){
   if(!surveyMap) return;
   surveyMap.dragging.disable();
   surveyMap.touchZoom.disable();
+  surveyMap.touchRotate?.disable?.();
   surveyMap.scrollWheelZoom.disable();
   surveyMap.doubleClickZoom.disable();
   surveyMap.boxZoom.disable();
@@ -1469,6 +1742,8 @@ function enableSurveyMapMovement(){
   if(!surveyMap) return;
   surveyMap.dragging.enable();
   surveyMap.touchZoom.enable();
+  if(mapLocked) surveyMap.touchRotate?.disable?.();
+  else surveyMap.touchRotate?.enable?.();
   surveyMap.scrollWheelZoom.enable();
   surveyMap.doubleClickZoom.disable();
   surveyMap.boxZoom.enable();
@@ -1498,9 +1773,11 @@ function parsePoleLabel(label){
 
 function addMapPole(latlng){
   const suggestion = suggestMissingPole(latlng);
-  const label = suggestion?.label || nextManualPoleName();
+  const naming = chooseAddedPoleName(latlng, suggestion);
+  if(!naming) return;
+  const label = naming.label;
 
-  const template = suggestion?.template?.span || {};
+  const template = naming.template?.span || suggestion?.template?.span || {};
   const gridRef = latLonToOSGrid(latlng.lat, latlng.lng);
   const span = {
     ...template,
@@ -1534,6 +1811,101 @@ function addPoleAtMapCenter(){
 function nextManualPoleName(){
   const count = (window.SPAN_DATA || []).filter((span) => span.manuallyAdded).length + 1;
   return `NEW POLE ${count}`;
+}
+
+function chooseAddedPoleName(latlng, gapSuggestion=null){
+  const nearestRun = nearestPoleRunForPoint(latlng);
+  const choices = poleNamingChoices(nearestRun?.run || [], gapSuggestion);
+
+  if(!choices.length){
+    return { label:nextManualPoleName(), template:gapSuggestion?.template || nearestRun?.template || null };
+  }
+
+  const lines = choices.map((choice, index) => `${index + 1}. ${choice.label} - ${choice.detail}`).join("\n");
+  const answer = window.prompt(`Name this new pole:\n${lines}\n\nType 1 or 2, or type a custom pole name.`, "1");
+  if(answer === null) return null;
+  const trimmed = answer.trim();
+  const choiceIndex = Number(trimmed) - 1;
+  if(Number.isInteger(choiceIndex) && choices[choiceIndex]){
+    return choices[choiceIndex];
+  }
+  const custom = trimmed.toUpperCase();
+  if(!custom) return null;
+  return { label:custom, template:gapSuggestion?.template || nearestRun?.template || null };
+}
+
+function poleNamingChoices(run, gapSuggestion=null){
+  const points = run.filter((point) => Number.isFinite(point.number));
+  const template = gapSuggestion?.template || points[0] || null;
+  const prefix = (gapSuggestion?.label?.match(/^[A-Z]+/i)?.[0] || points.find((point) => point.prefix && point.prefix !== "UNKNOWN")?.prefix || "POLE").toUpperCase();
+  const used = new Set(points.map((point) => point.number));
+  const max = points.length ? Math.max(...points.map((point) => point.number)) : null;
+
+  const choices = [];
+  if(Number.isFinite(max)){
+    choices.push({
+      label:`${prefix}${max + 1}`,
+      detail:"next pole ascending",
+      template:points.find((point) => point.number === max) || template
+    });
+  }
+
+  let descendingNumber = null;
+  if(gapSuggestion?.label){
+    const parsed = parsePoleLabel(gapSuggestion.label);
+    if(Number.isFinite(parsed.number)) descendingNumber = parsed.number;
+  }
+  if(!Number.isFinite(descendingNumber) && Number.isFinite(max)){
+    for(let candidate = max - 1; candidate >= 1; candidate--){
+      if(!used.has(candidate)){
+        descendingNumber = candidate;
+        break;
+      }
+    }
+    if(!Number.isFinite(descendingNumber)){
+      const min = Math.min(...points.map((point) => point.number));
+      if(min > 1) descendingNumber = min - 1;
+    }
+  }
+
+  if(Number.isFinite(descendingNumber)){
+    const descendingLabel = gapSuggestion?.label || `${prefix}${descendingNumber}`;
+    choices.push({
+      label:descendingLabel,
+      detail:gapSuggestion?.label ? "missing pole in this run" : "next available pole descending",
+      template
+    });
+  }
+
+  if(!choices.length) choices.push({ label:nextManualPoleName(), detail:"manual pole name", template });
+  return choices.slice(0, 2);
+}
+
+function nearestPoleRunForPoint(latlng){
+  if(!surveyMap || !surveyPolePoints.length) return null;
+  const tapPoint = surveyMap.latLngToContainerPoint(latlng);
+  let best = null;
+
+  for(const run of groupedSurveyPoleRuns()){
+    if(!run.length) continue;
+    for(let i = 0; i < run.length; i++){
+      const point = surveyMap.latLngToContainerPoint([run[i].lat, run[i].lon]);
+      const distance = Math.hypot(tapPoint.x - point.x, tapPoint.y - point.y);
+      if(!best || distance < best.distance){
+        best = { run, distance, template:run[i] };
+      }
+    }
+    for(let i = 0; i < run.length - 1; i++){
+      const a = surveyMap.latLngToContainerPoint([run[i].lat, run[i].lon]);
+      const b = surveyMap.latLngToContainerPoint([run[i + 1].lat, run[i + 1].lon]);
+      const distance = pointToSegmentDistance(tapPoint, a, b);
+      if(!best || distance < best.distance){
+        best = { run, distance, template:run[i] };
+      }
+    }
+  }
+
+  return best;
 }
 
 function suggestMissingPole(latlng){
@@ -1576,14 +1948,6 @@ function groupedSurveyPoleRuns(){
   return [...groups.values()].map((group) => group
     .filter((point) => Number.isFinite(point.number))
     .sort((a, b) => a.number - b.number || String(a.suffix).localeCompare(String(b.suffix))));
-}
-
-function pointToSegmentDistance(point, a, b){
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if(dx === 0 && dy === 0) return Math.hypot(point.x - a.x, point.y - a.y);
-  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
-  return Math.hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
 }
 
 function renameMapPole(mapPoleId){
@@ -1771,8 +2135,12 @@ function setMapTool(tool, force=false){
 }
 
 function updateMapMovementForTool(){
+  syncMapMovementState();
+}
+
+function syncMapMovementState(){
   if(!surveyMap) return;
-  if(mapLocked && mapTool === "group"){
+  if(mapLocked && (mapTool === "group" || selectedDrawing)){
     disableSurveyMapMovement();
   }else{
     enableSurveyMapMovement();
@@ -1780,6 +2148,8 @@ function updateMapMovementForTool(){
 }
 
 function handleSurveyMapClick(event){
+  if(handleCanvasLineClick(event.containerPoint)) return;
+
   if(mapTool === "pan" && selectedDrawing){
     selectDrawing(null);
     setSurveyMapStatus("Mark deselected.");
@@ -1829,8 +2199,10 @@ function addSurveyCircleShape(kind, points){
     radius,
     color:"#5fbd65",
     weight:5,
-    fill:false,
-    fillOpacity:0
+    fill:true,
+    fillColor:"#5fbd65",
+    fillOpacity:0.01,
+    className:"survey-drawing-shape"
   });
   addNumberedDrawing(shape, center, text, "circle", { radius });
 }
@@ -1841,8 +2213,10 @@ function addSurveyRectangleShape(kind, points){
   const shape = L.polygon(rect.corners, {
     color:"#5fbd65",
     weight:5,
-    fill:false,
-    fillOpacity:0
+    fill:true,
+    fillColor:"#5fbd65",
+    fillOpacity:0.01,
+    className:"survey-drawing-shape"
   });
   addNumberedDrawing(shape, rect.center, text, "rectangle");
 }
@@ -1857,12 +2231,7 @@ function nextDrawingLabel(kind){
 function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
   const label = L.marker(labelPosition, {
     draggable:false,
-    icon:L.divIcon({
-      className:"",
-      html:`<div class="draw-shape-label">${escapeHtml(text)}</div>`,
-      iconSize:[54,34],
-      iconAnchor:[27,17]
-    })
+    icon:drawingLabelIcon(text)
   });
   const group = L.layerGroup([shape, label]).addTo(surveyDrawingLayer);
   const drawing = {
@@ -1878,6 +2247,15 @@ function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
   mapDrawingStack.push(drawing);
   setMapTool("pan");
   selectDrawing(drawing);
+}
+
+function drawingLabelIcon(text){
+  return L.divIcon({
+    className:"",
+    html:`<div class="draw-shape-label">${escapeHtml(text)}</div>`,
+    iconSize:[54,34],
+    iconAnchor:[27,17]
+  });
 }
 
 function averageLatLng(points){
@@ -2026,14 +2404,36 @@ function strokeBounds(points){
 }
 
 function registerInteractiveDrawing(drawing){
+  let lastTapAt = 0;
+  let renamedAt = 0;
+  const handleRenameTap = (event) => {
+    const now = Date.now();
+    if(now - lastTapAt < 360){
+      L.DomEvent.stop(event);
+      renameDrawingItem(drawing);
+      renamedAt = now;
+      lastTapAt = 0;
+      return true;
+    }
+    lastTapAt = now;
+    return false;
+  };
+
   for(const layer of [drawing.shape, drawing.label]){
     layer.on("click", (event) => {
       L.DomEvent.stop(event);
+      if(handleRenameTap(event)) return;
       if(mapTool === "delete"){
         removeDrawingItem(drawing);
         return;
       }
       selectDrawing(drawing);
+    });
+    layer.on("dblclick", (event) => {
+      L.DomEvent.stop(event);
+      if(Date.now() - renamedAt < 500) return;
+      renameDrawingItem(drawing);
+      renamedAt = Date.now();
     });
   }
 
@@ -2047,17 +2447,30 @@ function registerInteractiveDrawing(drawing){
   });
 }
 
+function renameDrawingItem(drawing){
+  if(!drawing) return;
+  const current = drawing.text || "";
+  const next = (window.prompt("Tree/group label", current) || "").trim().toUpperCase();
+  if(!next || next === current) return;
+  drawing.text = next;
+  drawing.label.setIcon(drawingLabelIcon(next));
+  selectDrawing(drawing);
+  setSurveyMapStatus(`Renamed to ${next}.`);
+}
+
 function selectDrawing(drawing){
   if(selectedDrawing?.shape?.setStyle){
-    selectedDrawing.shape.setStyle({ color:"#5fbd65", weight:5 });
+    selectedDrawing.shape.setStyle({ color:"#5fbd65", weight:5, fillOpacity:0.01 });
   }
 
   selectedDrawing = drawing || null;
 
   if(selectedDrawing?.shape?.setStyle){
-    selectedDrawing.shape.setStyle({ color:"#d99a18", weight:6 });
+    selectedDrawing.shape.setStyle({ color:"#d99a18", weight:6, fillOpacity:0.08 });
+    selectedDrawing.shape.bringToFront?.();
     setSurveyMapStatus(`${selectedDrawing.text} selected. One finger moves it. Two fingers resize and rotate it.`);
   }
+  syncMapMovementState();
 }
 
 function removeDrawingItem(item){
@@ -2069,6 +2482,7 @@ function removeDrawingItem(item){
   }
   mapDrawingStack = mapDrawingStack.filter((layer) => layer !== item);
   if(selectedDrawing === item) selectedDrawing = null;
+  syncMapMovementState();
   setSurveyMapStatus("Drawing removed.");
 }
 
@@ -2115,8 +2529,7 @@ function gestureInfo(points){
 
 function isDrawingDomTarget(target){
   return Boolean(
-    target?.closest?.(".leaflet-marker-icon") ||
-    target?.tagName?.toLowerCase() === "path"
+    target?.closest?.(".survey-drawing-shape, .draw-shape-label")
   );
 }
 
@@ -2262,16 +2675,27 @@ function undoMapDrawing(){
       mapDrawingStack = mapDrawingStack.filter((layer) => layer !== activeRoute);
       activeRoute = null;
     }
+    setSurveyMapStatus("Last route point undone.");
     return;
   }
 
   const layer = mapDrawingStack.pop();
+  if(!layer){
+    setSurveyMapStatus("Nothing to undo.");
+    return;
+  }
   if(layer?.group && surveyDrawingLayer){
     surveyDrawingLayer.removeLayer(layer.group);
     if(selectedDrawing === layer) selectedDrawing = null;
   }else if(layer && surveyDrawingLayer){
     surveyDrawingLayer.removeLayer(layer);
+    if(layer === activeRoute){
+      activeRoute = null;
+      activeRoutePoints = [];
+    }
   }
+  syncMapMovementState();
+  setSurveyMapStatus("Last mark undone.");
 }
 
 function clearMapDrawings(){
@@ -2282,6 +2706,7 @@ function clearMapDrawings(){
   if(surveyDrawingLayer) surveyDrawingLayer.clearLayers();
   mapDrawingStack = [];
   selectedDrawing = null;
+  syncMapMovementState();
   activeRoute = null;
   activeRoutePoints = [];
   drawCounters = { tree:0, group:0 };
@@ -2390,6 +2815,8 @@ function clearSpanData(){
   spanSearchResults.innerHTML = "";
   if(surveyPoleLayer) surveyPoleLayer.clearLayers();
   if(surveyLineLayer) surveyLineLayer.clearLayers();
+  surveyLineShapes = [];
+  clearSurveyLineCanvas();
   surveyPoleBounds = null;
   surveyPolePoints = [];
   forcedMapPoleId = null;
@@ -2739,7 +3166,7 @@ function renderSpanSearchResult(span, index){
     : "";
 
   return `
-    <article class="card" id="span-search-${index}">
+    <article class="card span-match-card" id="span-search-${index}" role="button" tabindex="0" onclick="useSpanFromSearch(${index})" onkeydown="handleSpanCardKey(event, ${index})">
       <h2>Span match</h2>
       <div class="value">${escapeHtml(mainValue)}</div>
       ${detail ? `<div class="detail">${escapeHtml(detail)}</div>` : ""}
@@ -2747,9 +3174,15 @@ function renderSpanSearchResult(span, index){
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([`<button class="small primary" type="button" onclick="useSpanFromSearch(${index})">Use grid ref</button>`, copyButton("Copy span info", spanCopyText(span))])}
+      <div class="detail">Tap to select this span.</div>
     </article>
   `;
+}
+
+function handleSpanCardKey(event, index){
+  if(event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  useSpanFromSearch(index);
 }
 
 function useSpanFromSearch(index){
@@ -2787,6 +3220,9 @@ function fillFromSpanRecord(span){
   });
 
   spanSearchStatus.textContent = `Filled from ${span.voltage || "span"} ${span.span || ""}.`;
+  spanSearchInput.value = "";
+  currentSpanMatches = [];
+  spanSearchResults.innerHTML = "";
   resultsEl.scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
