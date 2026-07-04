@@ -24,6 +24,17 @@
   --shadow:0 16px 42px rgba(20,43,31,.13);
 }
 *{box-sizing:border-box}
+.sr-only{
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0;
+}
 body{
   margin:0;
   min-height:100vh;
@@ -34,7 +45,7 @@ body{
   font-family:Inter,Arial,sans-serif;
 }
 header{
-  padding:18px 16px 18px 108px;
+  padding:18px 108px 18px 16px;
   border-bottom:1px solid rgba(255,255,255,.12);
   background:linear-gradient(135deg,#123326,#0e261d);
   color:var(--cream);
@@ -79,7 +90,7 @@ main{
 .view-switch-fab{
   position:fixed;
   top:10px;
-  left:10px;
+  right:10px;
   z-index:920;
   min-height:38px;
   min-width:78px;
@@ -93,7 +104,7 @@ main{
 }
 body.map-mode .view-switch-fab{
   top:10px;
-  left:10px;
+  right:10px;
 }
 .tabs{
   display:grid;
@@ -136,14 +147,13 @@ body.map-mode .map-controls{
   z-index:840;
   left:10px;
   right:10px;
-  bottom:12px;
+  bottom:max(12px,env(safe-area-inset-bottom));
   margin:0;
   padding:10px;
   background:rgba(255,255,255,.92);
   box-shadow:var(--shadow);
   backdrop-filter:blur(7px);
 }
-body.map-mode .map-top-left,
 body.map-mode .map-top-right,
 body.map-mode .map-search{
   position:absolute;
@@ -154,13 +164,8 @@ body.map-mode .map-search{
   box-shadow:var(--shadow);
   backdrop-filter:blur(7px);
 }
-body.map-mode .map-top-left{
-  top:60px;
-  left:10px;
-  width:min(210px,45vw);
-}
 body.map-mode .map-top-right{
-  top:10px;
+  top:58px;
   right:10px;
   width:min(160px,36vw);
 }
@@ -174,7 +179,6 @@ body.map-mode .map-title{
   display:none;
 }
 body.screenshot-mode .map-controls,
-body.screenshot-mode .map-top-left,
 body.screenshot-mode .map-top-right,
 body.screenshot-mode .map-search,
 body.screenshot-mode .leaflet-control{
@@ -282,6 +286,46 @@ button.small,a.small{
   cursor:pointer;
   box-shadow:0 3px 10px rgba(20,43,31,.06);
 }
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.span-match-card:focus-visible{
+  outline:3px solid rgba(216,154,28,.75);
+  outline-offset:3px;
+}
+button:disabled{
+  opacity:.58;
+  cursor:not-allowed;
+}
+.status-line{
+  min-height:20px;
+}
+.status-line[data-tone="error"]{
+  color:#9d3328;
+  font-weight:800;
+}
+.status-line[data-tone="success"]{
+  color:var(--leaf-dark);
+  font-weight:800;
+}
+.state-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:28px;
+  margin-top:10px;
+  padding:5px 9px;
+  border:1px solid rgba(24,118,74,.18);
+  border-radius:999px;
+  background:#eef7f0;
+  color:var(--leaf-dark);
+  font:800 12px Inter,Arial,sans-serif;
+}
+.empty-state{
+  border-style:dashed;
+  background:rgba(255,255,255,.68);
+}
 input.text-field,textarea.text-field{
   width:100%;
   border:1px solid var(--line);
@@ -314,6 +358,9 @@ textarea.text-field{
   grid-template-columns:1fr auto;
   gap:8px;
   align-items:center;
+}
+.map-search-form{
+  grid-template-columns:minmax(0,1fr) auto auto;
 }
 .search-form .small{
   min-width:96px;
@@ -382,7 +429,7 @@ body.map-mode #surveyMap{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(9,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(10,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -407,6 +454,39 @@ body.map-mode #surveyMap{
   padding:10px 8px;
   touch-action:manipulation;
   user-select:none;
+}
+.map-toolbar.compact-labels .small{
+  min-width:44px;
+  padding:8px 4px;
+  background:var(--leaf-dark);
+  border-color:rgba(255,255,255,.16);
+  color:#fff;
+  font-size:19px;
+  line-height:1;
+  box-shadow:0 4px 14px rgba(10,31,22,.14);
+}
+.map-toolbar.compact-labels .small.primary{
+  background:var(--leaf);
+  border-color:var(--leaf);
+}
+.map-toolbar.compact-labels .small.danger{
+  background:#9d3328;
+  border-color:#9d3328;
+  color:#fff;
+}
+.map-toolbar.compact-labels .small:disabled{
+  background:#7f8b84;
+  border-color:#7f8b84;
+  color:rgba(255,255,255,.72);
+}
+.map-tool-icon{
+  width:24px;
+  height:24px;
+  display:block;
+  pointer-events:none;
+}
+.map-tool-icon *{
+  vector-effect:non-scaling-stroke;
 }
 .map-rotation-actions .small{
   min-height:38px;
@@ -535,12 +615,11 @@ a.primary,button.primary{
     width:auto;
     transform:none;
   }
-  body.map-mode .map-top-left{
+  body.map-mode .map-top-right{
     top:58px;
   }
-  body.map-mode .map-top-right{
-    top:8px;
-  }
+  .map-search-form{grid-template-columns:1fr 1fr}
+  .map-search-form input{grid-column:1 / -1}
   .map-toolbar{grid-template-columns:repeat(4,minmax(0,1fr))}
   .map-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
   .frame-actions{grid-template-columns:1fr}
@@ -556,52 +635,48 @@ a.primary,button.primary{
   <p>Field mapping, span lookup and survey copy helper</p>
 </header>
 
-<button class="view-switch-fab" id="viewSwitchBtn" type="button" onclick="toggleAppView()">Map</button>
+<button class="view-switch-fab" id="viewSwitchBtn" type="button" onclick="toggleAppView()" aria-label="Switch to map view">Map</button>
 
 <main>
-  <nav class="tabs" aria-label="App views">
-    <button class="tab-btn active" id="locatorTab" type="button" onclick="switchView('locator')">Locator</button>
-    <button class="tab-btn" id="mapTab" type="button" onclick="switchView('map')">Map</button>
+  <nav class="tabs" aria-label="App views" role="tablist">
+    <button class="tab-btn active" id="locatorTab" type="button" role="tab" aria-selected="true" aria-controls="locatorView" onclick="switchView('locator')">Locator</button>
+    <button class="tab-btn" id="mapTab" type="button" role="tab" aria-selected="false" aria-controls="mapView" onclick="switchView('map')">Map</button>
   </nav>
 
-  <section id="locatorView" class="view">
+  <section id="locatorView" class="view" role="tabpanel" aria-labelledby="locatorTab">
     <section class="hero">
-      <button id="locateBtn" type="button">LOCATE</button>
-      <div id="status">Tap to locate</div>
+      <button id="locateBtn" type="button" aria-describedby="status">LOCATE</button>
+      <div id="status" class="status-line" role="status" aria-live="polite">Tap to locate</div>
     </section>
 
     <section class="card search-panel">
       <h2>Span data</h2>
       <div class="field-row">
+        <label class="sr-only" for="spanFileInput">Upload span spreadsheet files</label>
         <input class="file-field" id="spanFileInput" type="file" accept=".csv,.xlsx,.xls" multiple>
       </div>
-      <div class="detail" id="spanDataStatus">No span spreadsheet imported on this device.</div>
+      <div class="detail status-line" id="spanDataStatus" role="status" aria-live="polite">No span spreadsheet imported on this device.</div>
       <div class="actions">
         <button class="small primary" type="button" onclick="importSpanFiles()">Import spreadsheet</button>
-        <button class="small" type="button" onclick="clearSpanData()">Clear data</button>
+        <button class="small danger" type="button" onclick="clearSpanData()">Clear data</button>
       </div>
     </section>
 
     <section class="card search-panel">
       <h2>Find span</h2>
       <form class="search-form" onsubmit="searchSpan(event)">
-        <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref">
+        <label class="sr-only" for="spanSearchInput">Search span data</label>
+        <input class="text-field" id="spanSearchInput" type="search" placeholder="Span, pole, feeder, circuit, primary, grid ref" autocomplete="off">
         <button class="small primary" type="submit">Search</button>
       </form>
-      <div class="detail" id="spanSearchStatus">Search your uploaded LV/HV span data.</div>
+      <div class="detail status-line" id="spanSearchStatus" role="status" aria-live="polite">Search your uploaded LV/HV span data.</div>
       <div class="match-list" id="spanSearchResults"></div>
     </section>
 
     <section id="results" class="grid"></section>
   </section>
 
-  <section id="mapView" class="view hidden">
-    <section class="card map-top-left">
-      <div class="frame-actions">
-        <button class="small primary" id="mapLockToggleBtn" type="button" onclick="toggleSurveyLock()">Lock map</button>
-      </div>
-    </section>
-
+  <section id="mapView" class="view hidden" role="tabpanel" aria-labelledby="mapTab">
     <section class="card map-top-right">
       <div class="map-compact-actions">
         <button class="small" id="baseMapToggleBtn" type="button" onclick="toggleSurveyBaseMap()">Satellite</button>
@@ -614,26 +689,29 @@ a.primary,button.primary{
     </section>
 
     <section class="card map-search">
-      <form class="search-form" onsubmit="searchMapSpan(event)">
-        <input class="text-field" id="mapSpanSearchInput" type="search" placeholder="Search span or pole">
+      <form class="search-form map-search-form" onsubmit="searchMapSpan(event)">
+        <label class="sr-only" for="mapSpanSearchInput">Search map span or pole</label>
+        <input class="text-field" id="mapSpanSearchInput" type="search" placeholder="Search span or pole" autocomplete="off">
         <button class="small primary" type="submit">Find</button>
+        <button class="small primary" id="mapLockToggleBtn" type="button" onclick="toggleSurveyLock()" aria-label="Lock this view and open drawing tools" title="Lock this view and open drawing tools">Draw</button>
       </form>
     </section>
 
     <section class="card search-panel map-controls">
       <h2 class="map-title">Map drawing</h2>
       <div class="map-hint" id="surveyMapStage">Frame the span</div>
-      <div class="detail" id="surveyMapStatus">Open the map tab to plot all imported spans.</div>
+      <div class="detail status-line" id="surveyMapStatus" role="status" aria-live="polite">Open the map tab to plot all imported spans.</div>
       <div class="map-toolbar">
-        <button class="small" id="tool-tree" type="button" onclick="setMapTool('tree')">Tree</button>
-        <button class="small" id="tool-group" type="button" onclick="setMapTool('group')">Group</button>
-        <button class="small" id="tool-pole" type="button" onclick="setMapTool('pole')">Add pole</button>
-        <button class="small" id="tool-link" type="button" onclick="setMapTool('link')">Link</button>
-        <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')">Unlink</button>
-        <button class="small" id="tool-label" type="button" onclick="setMapTool('label')">Label</button>
-        <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')">Delete</button>
-        <button class="small" type="button" onclick="undoMapDrawing()">Undo</button>
-        <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()">Screenshot</button>
+        <button class="small" id="tool-tree" type="button" onclick="setMapTool('tree')" aria-label="Place one tree" data-full-label="Tree" data-icon-key="tree">Tree</button>
+        <button class="small" id="tool-group" type="button" onclick="setMapTool('group')" aria-label="Draw a tree group" data-full-label="Group" data-icon-key="group">Group</button>
+        <button class="small" id="tool-pole" type="button" onclick="setMapTool('pole')" aria-label="Add missing pole" data-full-label="Add pole" data-icon-key="pole">Add pole</button>
+        <button class="small" id="tool-link" type="button" onclick="setMapTool('link')" aria-label="Link two poles" data-full-label="Link" data-icon-key="link">Link</button>
+        <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')" aria-label="Unlink two poles" data-full-label="Unlink" data-icon-key="unlink">Unlink</button>
+        <button class="small" id="tool-label" type="button" onclick="setMapTool('label')" aria-label="Add text label" data-full-label="Label" data-icon-key="label">Label</button>
+        <button class="small edit-action" id="renameDrawingBtn" type="button" onclick="renameSelectedDrawing()" aria-label="Rename selected tree or group" data-full-label="Rename" data-icon-key="rename" disabled>Rename</button>
+        <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')" aria-label="Delete selected map item" data-full-label="Delete" data-icon-key="delete">Delete</button>
+        <button class="small" type="button" onclick="undoMapDrawing()" aria-label="Undo last map mark" data-full-label="Undo" data-icon-key="undo">Undo</button>
+        <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()" aria-label="Save or share map screenshot" data-full-label="Screenshot" data-icon-key="screenshot">Screenshot</button>
       </div>
     </section>
     <section class="card map-canvas-card">
@@ -663,6 +741,19 @@ const viewSwitchBtn = document.getElementById("viewSwitchBtn");
 const surveyMapStatus = document.getElementById("surveyMapStatus");
 const surveyMapStage = document.getElementById("surveyMapStage");
 const mapSpanSearchInput = document.getElementById("mapSpanSearchInput");
+const USE_COMPACT_MAP_TOOL_LABELS = true;
+const MAP_TOOL_ICONS = {
+  tree:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l-5 6h2.5L6 14h4v5.5h4V14h4l-3.5-4.5H17l-5-6z"/><path d="M8.5 20h7"/></svg>`,
+  group:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l-3.5 4.5h1.8L4 13h3v5h2.4v-5h3L10 9.5h1.5L8 5z"/><path d="M16 4l-4 5h2l-2.8 4h3.3v6H17v-6h3.3L17.5 9H20l-4-5z"/><path d="M5.5 20h14"/></svg>`,
+  pole:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="14" r="4"/><path d="M17 5v7"/><path d="M13.5 8.5h7"/></svg>`,
+  link:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></svg>`,
+  unlink:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h1.5"/><path d="M14 12h.5"/><path d="M12 7l-1 3"/><path d="M13 14l-1 3"/></svg>`,
+  label:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14v10H5z"/><path d="M8 15V9"/><path d="M8 9h5"/><path d="M8 12h4"/></svg>`,
+  rename:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5l4.2-1 9-9a2 2 0 0 0-2.8-2.8l-9 9L5 18.5z"/><path d="M13.5 7.5l3 3"/></svg>`,
+  delete:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>`,
+  undo:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7l-4 4 4 4"/><path d="M5 11h9a5 5 0 1 1-3.5 8.5"/></svg>`,
+  screenshot:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8h3l1.5-2h3L15 8h3v10H6z"/><circle cx="12" cy="13" r="3"/><path d="M18 6h2v2"/><path d="M4 8V6h2"/><path d="M6 20H4v-2"/><path d="M20 18v2h-2"/></svg>`
+};
 let currentReport = null;
 let currentSpanMatches = [];
 let currentLocateMatches = [];
@@ -698,6 +789,7 @@ let selectedDrawing = null;
 let drawCounters = { tree:0, group:0 };
 let activeRoute = null;
 let activeRoutePoints = [];
+let restoringMapDrawings = false;
 window.SPAN_DATA = [];
 window.AE_DATA = [];
 
@@ -706,11 +798,26 @@ loadStoredSpanData();
 loadStoredManualMapLinks();
 loadStoredBlockedAutoMapLinks();
 loadBundledAEData();
+applyMapToolbarLabelMode();
 
 function setBusy(isBusy, text){
   locateBtn.disabled = isBusy;
   locateBtn.textContent = isBusy ? "..." : "LOCATE";
-  statusEl.textContent = text;
+  setElementStatus(statusEl, text, isBusy ? "" : "");
+}
+
+function applyMapToolbarLabelMode(){
+  const toolbar = document.querySelector(".map-toolbar");
+  if(!toolbar) return;
+  toolbar.classList.toggle("compact-labels", USE_COMPACT_MAP_TOOL_LABELS);
+  toolbar.querySelectorAll("button[data-full-label]").forEach((button) => {
+    if(USE_COMPACT_MAP_TOOL_LABELS){
+      button.innerHTML = MAP_TOOL_ICONS[button.dataset.iconKey] || escapeHtml(button.dataset.fullLabel || "");
+    }else{
+      button.textContent = button.dataset.fullLabel || button.textContent;
+    }
+    button.title = button.getAttribute("aria-label") || button.dataset.fullLabel || "";
+  });
 }
 
 function escapeHtml(value){
@@ -720,6 +827,13 @@ function escapeHtml(value){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
+}
+
+function setElementStatus(element, message, tone=""){
+  if(!element) return;
+  element.textContent = message;
+  if(tone) element.dataset.tone = tone;
+  else delete element.dataset.tone;
 }
 
 function card(id, title, value, detail="", actions=""){
@@ -743,16 +857,16 @@ function linkButton(label, href, primary=false){
 
 function copyButton(label, value){
   const encodedValue = encodeURIComponent(value).replaceAll("'","%27");
-  return `<button class="small" type="button" onclick="copyText('${encodedValue}')">${escapeHtml(label)}</button>`;
+  return `<button class="small" type="button" onclick="event.stopPropagation(); copyText('${encodedValue}')">${escapeHtml(label)}</button>`;
 }
 
 async function copyText(encoded){
   const text = decodeURIComponent(encoded);
   try{
     await navigator.clipboard.writeText(text);
-    statusEl.textContent = "Copied";
+    setElementStatus(statusEl, "Copied", "success");
   }catch{
-    statusEl.textContent = "Could not copy";
+    setElementStatus(statusEl, "Could not copy", "error");
   }
 }
 
@@ -763,6 +877,8 @@ function switchView(view){
   mapView.classList.toggle("hidden", !showMap);
   locatorTab.classList.toggle("active", !showMap);
   mapTab.classList.toggle("active", showMap);
+  locatorTab.setAttribute("aria-selected", String(!showMap));
+  mapTab.setAttribute("aria-selected", String(showMap));
   updateViewSwitchButton(showMap);
 
   if(showMap){
@@ -789,6 +905,7 @@ function updateViewSwitchButton(showMap=document.body.classList.contains("map-mo
   if(!viewSwitchBtn) return;
   viewSwitchBtn.textContent = showMap ? "Locator" : "Map";
   viewSwitchBtn.title = showMap ? "Return to locator view" : "Open map view";
+  viewSwitchBtn.setAttribute("aria-label", showMap ? "Switch to locator view" : "Switch to map view");
 }
 
 function initSurveyMap(attempts=0){
@@ -827,11 +944,13 @@ function initSurveyMap(attempts=0){
     preferCanvas:false,
     zoomSnap:0.25,
     zoomDelta:0.25,
+    maxZoom:22,
     maxBoundsViscosity:1.0
   }).setView([52.68, -1.82], 13);
 
   surveyStreetLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom:19,
+    maxNativeZoom:19,
+    maxZoom:22,
     attribution:"&copy; OpenStreetMap",
     keepBuffer:4,
     updateWhenIdle:true,
@@ -839,7 +958,8 @@ function initSurveyMap(attempts=0){
   }).addTo(surveyMap);
 
   surveySatelliteLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
-    maxZoom:19,
+    maxNativeZoom:19,
+    maxZoom:22,
     attribution:"Sources: Esri, Maxar, Earthstar Geographics, and the GIS User Community",
     keepBuffer:4,
     updateWhenIdle:true,
@@ -866,6 +986,7 @@ function initSurveyMap(attempts=0){
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
   renderSurveyMap(true);
+  restoreMapDrawings();
 }
 
 function setSurveyMapStatus(message){
@@ -962,6 +1083,10 @@ function scheduleSurveyLineRedrawAfterRotate(){
 function searchMapSpan(event){
   event.preventDefault();
   const query = mapSpanSearchInput?.value.trim() || "";
+  if(!Array.isArray(window.SPAN_DATA) || !window.SPAN_DATA.length){
+    setSurveyMapStatus("Import span data before searching the map.");
+    return;
+  }
   if(!query){
     setSurveyMapStatus("Type a span or pole name to zoom the map to it.");
     return;
@@ -1015,13 +1140,24 @@ async function captureSurveyMapScreenshot(){
       allowTaint:false,
       ignoreElements:(el) => Boolean(el.closest?.(".leaflet-control"))
     });
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    const file = blob ? new File([blob], `survey-map-${new Date().toISOString().slice(0, 10)}.png`, { type:"image/png" }) : null;
+    if(file && navigator.canShare?.({ files:[file] }) && navigator.share){
+      await navigator.share({
+        files:[file],
+        title:"Survey map screenshot",
+        text:"Save this map image to Photos or Files."
+      });
+      setSurveyMapStatus("Share sheet opened. Choose Save Image to put it in Photos.");
+      return;
+    }
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = `survey-map-${new Date().toISOString().slice(0, 10)}.png`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    setSurveyMapStatus("Map screenshot saved.");
+    setSurveyMapStatus("Screenshot downloaded. On iPad, use Share or Files to save it to Photos.");
   }catch{
     enterMapScreenshotMode();
   }
@@ -1044,9 +1180,39 @@ function installSurveyTouchHandlers(mapEl){
   let pointTap = null;
   const editPointers = new Map();
   let editGesture = null;
-  let selectedDrawingLastTapAt = 0;
+  let selectedDrawingLastTap = null;
 
   mapEl.addEventListener("pointerdown", (event) => {
+    const drawingTarget = mapLocked && mapTool === "pan"
+      ? (findDrawingFromEventTarget(event.target) || findDrawingAtPointer(event))
+      : null;
+    if(drawingTarget){
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      selectDrawing(drawingTarget);
+      mapEl.setPointerCapture?.(event.pointerId);
+      editPointers.set(event.pointerId, pointerEventPoint(event));
+      editGesture = {
+        last:gestureInfo([...editPointers.values()]),
+        totalMove:0,
+        moved:false,
+        startedOnDrawing:true,
+        drawing:drawingTarget
+      };
+      disableSurveyMapMovement();
+      return;
+    }
+
+    if(selectedDrawing && mapLocked && mapTool === "pan" && !editGesture && !isDrawingDomTarget(event.target)){
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      selectDrawing(null);
+      setSurveyMapStatus("Mark deselected.");
+      return;
+    }
+
     if(editGesture && selectedDrawing && mapLocked && mapTool === "pan"){
       event.preventDefault();
       event.stopPropagation();
@@ -1054,21 +1220,6 @@ function installSurveyTouchHandlers(mapEl){
       mapEl.setPointerCapture?.(event.pointerId);
       editPointers.set(event.pointerId, pointerEventPoint(event));
       editGesture.last = gestureInfo([...editPointers.values()]);
-      disableSurveyMapMovement();
-      return;
-    }
-
-    if(selectedDrawing && mapLocked && mapTool === "pan" && isDrawingDomTarget(event.target)){
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation?.();
-      mapEl.setPointerCapture?.(event.pointerId);
-      editPointers.set(event.pointerId, pointerEventPoint(event));
-      editGesture = {
-        last:gestureInfo([...editPointers.values()]),
-        moved:false,
-        startedOnDrawing:isDrawingDomTarget(event.target)
-      };
       disableSurveyMapMovement();
       return;
     }
@@ -1120,9 +1271,12 @@ function installSurveyTouchHandlers(mapEl){
 
       const dx = current.center.x - editGesture.last.center.x;
       const dy = current.center.y - editGesture.last.center.y;
-      if(Math.hypot(dx, dy) > 1){
-        moveSelectedDrawingByPixels(dx, dy);
+      editGesture.totalMove += Math.hypot(dx, dy);
+      if(editGesture.totalMove > 6){
         editGesture.moved = true;
+      }
+      if(Math.hypot(dx, dy) > 1 && editGesture.moved){
+        moveSelectedDrawingByPixels(dx, dy);
       }
 
       if(current.count >= 2 && editGesture.last.count >= 2){
@@ -1172,19 +1326,31 @@ function installSurveyTouchHandlers(mapEl){
         event.stopImmediatePropagation?.();
         mapEl.releasePointerCapture?.(event.pointerId);
         editPointers.delete(event.pointerId);
-        if(editGesture && !editGesture.moved && !editGesture.startedOnDrawing){
+        const wasCancelled = event.type === "pointercancel";
+        if(!wasCancelled && editGesture && !editGesture.moved && !editGesture.startedOnDrawing){
           selectDrawing(null);
           setSurveyMapStatus("Mark deselected.");
-        }else if(editGesture && !editGesture.moved && editGesture.startedOnDrawing && selectedDrawing){
+        }else if(!wasCancelled && editGesture && !editGesture.moved && editGesture.startedOnDrawing && selectedDrawing){
           const now = Date.now();
-          if(now - selectedDrawingLastTapAt < 380){
-            renameDrawingItem(selectedDrawing);
-            selectedDrawingLastTapAt = 0;
+          const tapPoint = pointerEventPoint(event);
+          const lastTapDistance = selectedDrawingLastTap
+            ? Math.hypot(tapPoint.x - selectedDrawingLastTap.x, tapPoint.y - selectedDrawingLastTap.y)
+            : Infinity;
+          const tappedDrawing = editGesture.drawing || selectedDrawing;
+          if(selectedDrawingLastTap?.drawing === tappedDrawing && now - selectedDrawingLastTap.time < 460 && lastTapDistance < 28){
+            renameDrawingItem(tappedDrawing);
+            selectedDrawingLastTap = null;
           }else{
-            selectedDrawingLastTapAt = now;
+            selectedDrawingLastTap = {
+              time:now,
+              x:tapPoint.x,
+              y:tapPoint.y,
+              drawing:tappedDrawing
+            };
             setSurveyMapStatus(`${selectedDrawing.text} selected. Double tap to rename, drag to move, pinch to resize.`);
           }
         }
+        if(editGesture?.moved) saveMapDrawings();
         if(!editPointers.size){
           editGesture = null;
           syncMapMovementState();
@@ -1211,6 +1377,24 @@ function installSurveyTouchHandlers(mapEl){
       setTimeout(() => {
         suppressClick = false;
       }, 650);
+    }, { passive:false, capture:true });
+  }
+
+  for(const eventName of ["touchstart","touchmove","touchend","touchcancel"]){
+    mapEl.addEventListener(eventName, (event) => {
+      if(!selectedDrawing || !mapLocked || mapTool !== "pan") return;
+      if(eventName === "touchstart" && !isDrawingDomTarget(event.target) && !editGesture){
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        selectDrawing(null);
+        setSurveyMapStatus("Mark deselected.");
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation?.();
+      disableSurveyMapMovement();
     }, { passive:false, capture:true });
   }
 
@@ -1687,7 +1871,9 @@ function toggleSurveyLock(){
 function updateLockButton(){
   const button = document.getElementById("mapLockToggleBtn");
   if(!button) return;
-  button.textContent = mapLocked ? "Unlock map" : "Lock map";
+  button.textContent = mapLocked ? "Frame" : "Draw";
+  button.title = mapLocked ? "Return to framing and map rotation" : "Lock this view and open drawing tools";
+  button.setAttribute("aria-label", button.title);
   button.classList.toggle("primary", !mapLocked);
   updateSurveyMapRotationButton();
 }
@@ -1793,10 +1979,29 @@ function addMapPole(latlng){
   };
 
   window.SPAN_DATA.push(span);
+  applyAddedPoleGapLinks(span, naming.gap || suggestion);
   persistSpanData();
   renderSurveyMap(false);
   setMapTool("pan");
   setSurveyMapStatus(`${label} added. Drag it to fine tune, or tap the pole popup to rename.`);
+}
+
+function applyAddedPoleGapLinks(span, gap){
+  if(!span?.mapPoleId || !gap?.a?.span?.mapPoleId || !gap?.b?.span?.mapPoleId) return;
+  const oldAutoKey = mapLinkKey(gap.a.span.mapPoleId, gap.b.span.mapPoleId);
+  if(!blockedAutoMapLinks.includes(oldAutoKey)) blockedAutoMapLinks.push(oldAutoKey);
+  persistBlockedAutoMapLinks();
+  addManualMapLink(gap.a.span.mapPoleId, span.mapPoleId);
+  addManualMapLink(span.mapPoleId, gap.b.span.mapPoleId);
+}
+
+function addManualMapLink(a, b){
+  if(!a || !b || a === b) return;
+  const key = mapLinkKey(a, b);
+  const exists = manualMapLinks.some((link) => mapLinkKey(link.a, link.b) === key);
+  if(exists) return;
+  manualMapLinks.push({ id:createId("link"), a, b });
+  persistManualMapLinks();
 }
 
 function addPoleAtMapCenter(){
@@ -1814,98 +2019,72 @@ function nextManualPoleName(){
 }
 
 function chooseAddedPoleName(latlng, gapSuggestion=null){
-  const nearestRun = nearestPoleRunForPoint(latlng);
-  const choices = poleNamingChoices(nearestRun?.run || [], gapSuggestion);
+  const gap = nearestNumberGapForPoint(latlng) || gapSuggestion;
+  const choices = poleGapNamingChoices(gap);
 
   if(!choices.length){
-    return { label:nextManualPoleName(), template:gapSuggestion?.template || nearestRun?.template || null };
+    setSurveyMapStatus("Tap near a dotted missing-pole line to add a pole there.");
+    return null;
   }
 
   const lines = choices.map((choice, index) => `${index + 1}. ${choice.label} - ${choice.detail}`).join("\n");
-  const answer = window.prompt(`Name this new pole:\n${lines}\n\nType 1 or 2, or type a custom pole name.`, "1");
+  const answer = window.prompt(`Choose the new pole name:\n${lines}\n\nType 1 or 2.`, "1");
   if(answer === null) return null;
   const trimmed = answer.trim();
   const choiceIndex = Number(trimmed) - 1;
   if(Number.isInteger(choiceIndex) && choices[choiceIndex]){
     return choices[choiceIndex];
   }
-  const custom = trimmed.toUpperCase();
-  if(!custom) return null;
-  return { label:custom, template:gapSuggestion?.template || nearestRun?.template || null };
+  setSurveyMapStatus("Pole not added. Choose option 1 or 2.");
+  return null;
 }
 
-function poleNamingChoices(run, gapSuggestion=null){
-  const points = run.filter((point) => Number.isFinite(point.number));
-  const template = gapSuggestion?.template || points[0] || null;
-  const prefix = (gapSuggestion?.label?.match(/^[A-Z]+/i)?.[0] || points.find((point) => point.prefix && point.prefix !== "UNKNOWN")?.prefix || "POLE").toUpperCase();
-  const used = new Set(points.map((point) => point.number));
-  const max = points.length ? Math.max(...points.map((point) => point.number)) : null;
+function poleGapNamingChoices(gap){
+  if(!gap?.a || !gap?.b) return [];
+  const a = gap.a.number <= gap.b.number ? gap.a : gap.b;
+  const b = gap.a.number <= gap.b.number ? gap.b : gap.a;
+  const prefix = (a.prefix && a.prefix !== "UNKNOWN" ? a.prefix : b.prefix && b.prefix !== "UNKNOWN" ? b.prefix : "POLE").toUpperCase();
+  const suffix = a.suffix || b.suffix || "";
+  const afterBefore = a.number + 1;
+  const beforeAfter = b.number - 1;
+  const template = gap.template || a;
 
-  const choices = [];
-  if(Number.isFinite(max)){
-    choices.push({
-      label:`${prefix}${max + 1}`,
-      detail:"next pole ascending",
-      template:points.find((point) => point.number === max) || template
-    });
-  }
-
-  let descendingNumber = null;
-  if(gapSuggestion?.label){
-    const parsed = parsePoleLabel(gapSuggestion.label);
-    if(Number.isFinite(parsed.number)) descendingNumber = parsed.number;
-  }
-  if(!Number.isFinite(descendingNumber) && Number.isFinite(max)){
-    for(let candidate = max - 1; candidate >= 1; candidate--){
-      if(!used.has(candidate)){
-        descendingNumber = candidate;
-        break;
-      }
+  const choices = [
+    {
+      label:`${prefix}${afterBefore}${suffix}`,
+      detail:`one after ${a.label}`,
+      template,
+      gap
+    },
+    {
+      label:`${prefix}${beforeAfter}${suffix}`,
+      detail:`one before ${b.label}`,
+      template,
+      gap
     }
-    if(!Number.isFinite(descendingNumber)){
-      const min = Math.min(...points.map((point) => point.number));
-      if(min > 1) descendingNumber = min - 1;
-    }
-  }
-
-  if(Number.isFinite(descendingNumber)){
-    const descendingLabel = gapSuggestion?.label || `${prefix}${descendingNumber}`;
-    choices.push({
-      label:descendingLabel,
-      detail:gapSuggestion?.label ? "missing pole in this run" : "next available pole descending",
-      template
-    });
-  }
-
-  if(!choices.length) choices.push({ label:nextManualPoleName(), detail:"manual pole name", template });
-  return choices.slice(0, 2);
+  ];
+  return choices;
 }
 
-function nearestPoleRunForPoint(latlng){
+function nearestNumberGapForPoint(latlng){
   if(!surveyMap || !surveyPolePoints.length) return null;
   const tapPoint = surveyMap.latLngToContainerPoint(latlng);
   let best = null;
 
   for(const run of groupedSurveyPoleRuns()){
-    if(!run.length) continue;
-    for(let i = 0; i < run.length; i++){
-      const point = surveyMap.latLngToContainerPoint([run[i].lat, run[i].lon]);
-      const distance = Math.hypot(tapPoint.x - point.x, tapPoint.y - point.y);
-      if(!best || distance < best.distance){
-        best = { run, distance, template:run[i] };
-      }
-    }
     for(let i = 0; i < run.length - 1; i++){
+      const gap = Math.abs(run[i + 1].number - run[i].number);
+      if(gap <= 1) continue;
       const a = surveyMap.latLngToContainerPoint([run[i].lat, run[i].lon]);
       const b = surveyMap.latLngToContainerPoint([run[i + 1].lat, run[i + 1].lon]);
       const distance = pointToSegmentDistance(tapPoint, a, b);
       if(!best || distance < best.distance){
-        best = { run, distance, template:run[i] };
+        best = { a:run[i], b:run[i + 1], distance, template:run[i] };
       }
     }
   }
 
-  return best;
+  return best && best.distance <= 120 ? best : null;
 }
 
 function suggestMissingPole(latlng){
@@ -1930,7 +2109,9 @@ function suggestMissingPole(latlng){
       best = {
         distance,
         label:`${a.prefix}${missingNumber}${a.suffix || ""}`,
-        template:a
+        template:a,
+        a,
+        b
       };
     }
   }
@@ -2118,7 +2299,11 @@ function setMapTool(tool, force=false){
   updateMapMovementForTool();
   for(const id of ["pan","pole","tree","group","link","unlink","route","label","delete"]){
     const button = document.getElementById(`tool-${id}`);
-    if(button) button.classList.toggle("active", id === tool);
+    if(button){
+      const active = id === tool;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-pressed", String(active));
+    }
   }
   const messages = {
     pan:"Pan and zoom the locked map. Tap a mark to select it.",
@@ -2222,13 +2407,34 @@ function addSurveyRectangleShape(kind, points){
 }
 
 function nextDrawingLabel(kind){
+  recalculateDrawCounters();
   const prefix = kind === "group" ? "G" : "T";
   const key = kind === "group" ? "group" : "tree";
   drawCounters[key] += 1;
   return `${prefix}${drawCounters[key]}`;
 }
 
+function recalculateDrawCounters(){
+  const next = { tree:0, group:0 };
+  for(const item of mapDrawingStack){
+    const text = String(item?.text || "").trim().toUpperCase();
+    const match = text.match(/^([TG])(\d+)$/);
+    if(!match) continue;
+    const key = match[1] === "G" ? "group" : "tree";
+    next[key] = Math.max(next[key], Number(match[2]));
+  }
+  drawCounters = next;
+}
+
 function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
+  const drawing = createDrawingItem(shape, labelPosition, text, type, meta);
+  setMapTool("pan");
+  selectDrawing(drawing);
+  saveMapDrawings();
+  setSurveyMapStatus(`${text} added and saved on this device. One finger moves it. Two fingers resize and rotate it.`);
+}
+
+function createDrawingItem(shape, labelPosition, text, type="shape", meta={}){
   const label = L.marker(labelPosition, {
     draggable:false,
     icon:drawingLabelIcon(text)
@@ -2245,8 +2451,7 @@ function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
   };
   registerInteractiveDrawing(drawing);
   mapDrawingStack.push(drawing);
-  setMapTool("pan");
-  selectDrawing(drawing);
+  return drawing;
 }
 
 function drawingLabelIcon(text){
@@ -2444,6 +2649,7 @@ function registerInteractiveDrawing(drawing){
   drawing.label.on("dragend", () => {
     moveDrawingTo(drawing, drawing.label.getLatLng());
     selectDrawing(drawing);
+    saveMapDrawings();
   });
 }
 
@@ -2454,8 +2660,18 @@ function renameDrawingItem(drawing){
   if(!next || next === current) return;
   drawing.text = next;
   drawing.label.setIcon(drawingLabelIcon(next));
+  recalculateDrawCounters();
+  saveMapDrawings();
   selectDrawing(drawing);
-  setSurveyMapStatus(`Renamed to ${next}.`);
+  setSurveyMapStatus(`Renamed to ${next} and saved on this device.`);
+}
+
+function renameSelectedDrawing(){
+  if(!selectedDrawing){
+    setSurveyMapStatus("Tap a tree or group first, then press Rename.");
+    return;
+  }
+  renameDrawingItem(selectedDrawing);
 }
 
 function selectDrawing(drawing){
@@ -2468,9 +2684,15 @@ function selectDrawing(drawing){
   if(selectedDrawing?.shape?.setStyle){
     selectedDrawing.shape.setStyle({ color:"#d99a18", weight:6, fillOpacity:0.08 });
     selectedDrawing.shape.bringToFront?.();
-    setSurveyMapStatus(`${selectedDrawing.text} selected. One finger moves it. Two fingers resize and rotate it.`);
+    setSurveyMapStatus(`${selectedDrawing.text} selected. Press Rename, or double tap the mark.`);
   }
+  updateSelectedDrawingControls();
   syncMapMovementState();
+}
+
+function updateSelectedDrawingControls(){
+  const renameButton = document.getElementById("renameDrawingBtn");
+  if(renameButton) renameButton.disabled = !selectedDrawing;
 }
 
 function removeDrawingItem(item){
@@ -2482,8 +2704,11 @@ function removeDrawingItem(item){
   }
   mapDrawingStack = mapDrawingStack.filter((layer) => layer !== item);
   if(selectedDrawing === item) selectedDrawing = null;
+  recalculateDrawCounters();
+  saveMapDrawings();
+  updateSelectedDrawingControls();
   syncMapMovementState();
-  setSurveyMapStatus("Drawing removed.");
+  setSurveyMapStatus("Drawing removed and saved on this device.");
 }
 
 function moveDrawingTo(drawing, newCenter){
@@ -2533,6 +2758,69 @@ function isDrawingDomTarget(target){
   );
 }
 
+function findDrawingFromEventTarget(target){
+  if(!target) return null;
+  return mapDrawingStack.find((item) => {
+    if(!item?.group) return false;
+    const shapeNode = item.shape?._path;
+    const labelNode = item.label?._icon;
+    return (shapeNode && (target === shapeNode || shapeNode.contains?.(target))) ||
+      (labelNode && (target === labelNode || labelNode.contains?.(target)));
+  }) || null;
+}
+
+function findDrawingAtPointer(event){
+  if(!surveyMap) return null;
+  const point = L.point(event.clientX, event.clientY);
+  const items = [...mapDrawingStack].reverse();
+
+  for(const item of items){
+    if(!item?.group || !item.label) continue;
+    const center = item.label.getLatLng();
+    const centerPoint = surveyMap.latLngToContainerPoint(center);
+    if(point.distanceTo(centerPoint) <= 42) return item;
+
+    if(item.type === "circle" && item.shape?.getRadius){
+      const edge = surveyMap.latLngToContainerPoint(offsetLatLngEast(center, item.shape.getRadius()));
+      const radiusPx = Math.max(18, centerPoint.distanceTo(edge));
+      if(point.distanceTo(centerPoint) <= radiusPx + 18) return item;
+    }else if(item.shape?.getLatLngs){
+      const corners = getPolygonCorners(item).map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+      if(isPointInPolygonPixels(point, corners) || isPointNearPolygonEdge(point, corners, 18)) return item;
+    }
+  }
+
+  return null;
+}
+
+function offsetLatLngEast(latlng, meters){
+  const lngOffset = meters / (111320 * Math.max(0.2, Math.cos(latlng.lat * Math.PI / 180)));
+  return L.latLng(latlng.lat, latlng.lng + lngOffset);
+}
+
+function isPointInPolygonPixels(point, polygon){
+  let inside = false;
+  for(let i = 0, j = polygon.length - 1; i < polygon.length; j = i++){
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersects = ((yi > point.y) !== (yj > point.y)) &&
+      (point.x < (xj - xi) * (point.y - yi) / ((yj - yi) || 0.000001) + xi);
+    if(intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function isPointNearPolygonEdge(point, polygon, tolerance){
+  for(let i = 0; i < polygon.length; i++){
+    const a = polygon[i];
+    const b = polygon[(i + 1) % polygon.length];
+    if(pointToSegmentDistance(point, a, b) <= tolerance) return true;
+  }
+  return false;
+}
+
 function moveSelectedDrawingByPixels(dx, dy){
   if(!selectedDrawing || !surveyMap) return;
   const center = selectedDrawing.label.getLatLng();
@@ -2548,6 +2836,7 @@ function resizeSelectedDrawing(factor){
   }
 
   resizeDrawing(selectedDrawing, factor);
+  saveMapDrawings();
   setSurveyMapStatus(`${selectedDrawing.text} resized.`);
 }
 
@@ -2558,6 +2847,7 @@ function rotateSelectedDrawing(degrees){
   }
 
   rotateDrawing(selectedDrawing, degrees);
+  saveMapDrawings();
   setSurveyMapStatus(`${selectedDrawing.text} rotated.`);
 }
 
@@ -2616,27 +2906,139 @@ function getPolygonCorners(drawing){
   return Array.isArray(latLngs[0]) ? latLngs[0] : latLngs;
 }
 
+function compactLatLng(latlng){
+  return {
+    lat:Number(latlng.lat.toFixed(7)),
+    lng:Number(latlng.lng.toFixed(7))
+  };
+}
+
+function saveMapDrawings(){
+  if(restoringMapDrawings) return;
+  try{
+    const records = [];
+    for(const item of mapDrawingStack){
+      if(item?.group && item.shape && item.label){
+        const center = item.label.getLatLng();
+        if(item.type === "circle"){
+          records.push({
+            kind:"drawing",
+            type:"circle",
+            text:item.text,
+            center:compactLatLng(center),
+            radius:Math.round(item.shape.getRadius() * 100) / 100
+          });
+        }else if(item.shape.getLatLngs){
+          records.push({
+            kind:"drawing",
+            type:"rectangle",
+            text:item.text,
+            center:compactLatLng(center),
+            corners:getPolygonCorners(item).map(compactLatLng)
+          });
+        }
+      }else if(item?.itemType === "route" && item.getLatLngs){
+        const points = item.getLatLngs().map(compactLatLng);
+        if(points.length) records.push({ kind:"route", points });
+      }else if(item?.itemType === "label" && item.getLatLng){
+        records.push({
+          kind:"label",
+          text:item.labelText || "Label",
+          position:compactLatLng(item.getLatLng())
+        });
+      }
+    }
+
+    if(records.length){
+      localStorage.setItem("treeSurveyMapDrawings", JSON.stringify(records));
+    }else{
+      localStorage.removeItem("treeSurveyMapDrawings");
+    }
+  }catch{
+    setSurveyMapStatus("Map markings changed, but this browser could not save them locally.");
+  }
+}
+
+function restoreMapDrawings(){
+  if(!surveyDrawingLayer || !window.L) return;
+  try{
+    const stored = localStorage.getItem("treeSurveyMapDrawings");
+    if(!stored) return;
+    const records = JSON.parse(stored);
+    if(!Array.isArray(records) || mapDrawingStack.length) return;
+
+    restoringMapDrawings = true;
+    for(const record of records){
+      if(record.kind === "drawing" && record.type === "circle" && record.center){
+        const center = L.latLng(record.center.lat, record.center.lng);
+        const shape = L.circle(center, {
+          radius:Number(record.radius) || 7,
+          color:"#5fbd65",
+          weight:5,
+          fill:true,
+          fillColor:"#5fbd65",
+          fillOpacity:0.01,
+          className:"survey-drawing-shape"
+        });
+        createDrawingItem(shape, center, record.text || "T1", "circle", { radius:Number(record.radius) || 7 });
+      }else if(record.kind === "drawing" && record.corners?.length){
+        const corners = record.corners.map((point) => L.latLng(point.lat, point.lng));
+        const center = record.center ? L.latLng(record.center.lat, record.center.lng) : L.latLngBounds(corners).getCenter();
+        const shape = L.polygon(corners, {
+          color:"#5fbd65",
+          weight:5,
+          fill:true,
+          fillColor:"#5fbd65",
+          fillOpacity:0.01,
+          className:"survey-drawing-shape"
+        });
+        createDrawingItem(shape, center, record.text || "G1", "rectangle");
+      }else if(record.kind === "route" && record.points?.length){
+        createAccessRoute(record.points.map((point) => L.latLng(point.lat, point.lng)));
+      }else if(record.kind === "label" && record.position){
+        createTextLabel(L.latLng(record.position.lat, record.position.lng), record.text || "Label");
+      }
+    }
+    recalculateDrawCounters();
+    setSurveyMapStatus(`${mapDrawingStack.length} saved map mark${mapDrawingStack.length === 1 ? "" : "s"} restored on this device.`);
+  }catch{
+    localStorage.removeItem("treeSurveyMapDrawings");
+    setSurveyMapStatus("Saved map markings could not be read, so they were reset.");
+  }finally{
+    restoringMapDrawings = false;
+  }
+}
+
 function addAccessRoutePoint(latlng){
   activeRoutePoints.push(latlng);
 
   if(!activeRoute){
-    activeRoute = L.polyline([], {
-      color:"#f4c430",
-      weight:5,
-      opacity:0.95
-    }).addTo(surveyDrawingLayer);
-    activeRoute.on("click", (event) => {
-      if(mapTool !== "delete") return;
-      L.DomEvent.stop(event);
-      removeDrawingItem(activeRoute);
-      activeRoute = null;
-      activeRoutePoints = [];
-      setSurveyMapStatus("Access route removed.");
-    });
-    mapDrawingStack.push(activeRoute);
+    activeRoute = createAccessRoute([]);
   }
 
   activeRoute.setLatLngs(activeRoutePoints);
+  saveMapDrawings();
+}
+
+function createAccessRoute(points){
+  const route = L.polyline(points, {
+    color:"#f4c430",
+    weight:5,
+    opacity:0.95
+  }).addTo(surveyDrawingLayer);
+  route.itemType = "route";
+  route.on("click", (event) => {
+    if(mapTool !== "delete") return;
+    L.DomEvent.stop(event);
+    removeDrawingItem(route);
+    if(activeRoute === route){
+      activeRoute = null;
+      activeRoutePoints = [];
+    }
+    setSurveyMapStatus("Access route removed.");
+  });
+  mapDrawingStack.push(route);
+  return route;
 }
 
 function finishAccessRoute(){
@@ -2648,6 +3050,11 @@ function finishAccessRoute(){
 function addSurveyTextLabel(latlng){
   const text = window.prompt("Label text");
   if(!text) return;
+  createTextLabel(latlng, text);
+  saveMapDrawings();
+}
+
+function createTextLabel(latlng, text){
   const marker = L.marker(latlng, {
     draggable:true,
     icon:L.divIcon({
@@ -2657,13 +3064,17 @@ function addSurveyTextLabel(latlng){
       iconAnchor:[0,13]
     })
   }).addTo(surveyDrawingLayer);
+  marker.itemType = "label";
+  marker.labelText = text;
   marker.on("click", (event) => {
     if(mapTool !== "delete") return;
     L.DomEvent.stop(event);
     removeDrawingItem(marker);
     setSurveyMapStatus("Label removed.");
   });
+  marker.on("dragend", () => saveMapDrawings());
   mapDrawingStack.push(marker);
+  return marker;
 }
 
 function undoMapDrawing(){
@@ -2675,6 +3086,7 @@ function undoMapDrawing(){
       mapDrawingStack = mapDrawingStack.filter((layer) => layer !== activeRoute);
       activeRoute = null;
     }
+    saveMapDrawings();
     setSurveyMapStatus("Last route point undone.");
     return;
   }
@@ -2694,11 +3106,14 @@ function undoMapDrawing(){
       activeRoutePoints = [];
     }
   }
+  recalculateDrawCounters();
+  saveMapDrawings();
+  updateSelectedDrawingControls();
   syncMapMovementState();
   setSurveyMapStatus("Last mark undone.");
 }
 
-function clearMapDrawings(){
+function clearMapDrawings(showMessage=true){
   if(activeStrokePreview && surveyDrawingLayer){
     surveyDrawingLayer.removeLayer(activeStrokePreview);
     activeStrokePreview = null;
@@ -2706,11 +3121,13 @@ function clearMapDrawings(){
   if(surveyDrawingLayer) surveyDrawingLayer.clearLayers();
   mapDrawingStack = [];
   selectedDrawing = null;
+  updateSelectedDrawingControls();
   syncMapMovementState();
   activeRoute = null;
   activeRoutePoints = [];
   drawCounters = { tree:0, group:0 };
-  setSurveyMapStatus("Map markings cleared.");
+  saveMapDrawings();
+  if(showMessage) setSurveyMapStatus("Map markings cleared.");
 }
 
 function loadStoredSpanData(){
@@ -2758,37 +3175,53 @@ function loadStoredBlockedAutoMapLinks(){
 
 function updateSpanDataStatus(message=""){
   const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
-  spanDataStatus.textContent = message || (count
+  setElementStatus(spanDataStatus, message || (count
     ? `${count} spans imported.`
-    : "No span spreadsheet imported on this device.");
-  spanSearchStatus.textContent = count
+    : "No span spreadsheet imported on this device."), message ? "success" : "");
+  setElementStatus(spanSearchStatus, count
     ? "Search your imported LV/HV span data."
-    : "Import a spreadsheet before searching spans.";
+    : "Import a spreadsheet before searching spans.", count ? "" : "error");
   if(surveyMapStatus){
-    surveyMapStatus.textContent = count
+    setSurveyMapStatus(count
       ? `${count} span rows ready. Open the map to plot them automatically.`
-      : "Import a span spreadsheet, then open the map.";
+      : "Import a span spreadsheet, then open the map.");
   }
+}
+
+function spanDataQualitySummary(spans){
+  const rows = Array.isArray(spans) ? spans : [];
+  if(!rows.length) return "";
+  const missingPrimary = rows.filter((span) => !primarySubValue(span)).length;
+  const missingFeeder = rows.filter((span) => !(span.hvFeeder || span.feederName)).length;
+  const missingToPole = rows.filter((span) => !span.toPole).length;
+  const issues = [
+    missingPrimary ? `${missingPrimary} missing primary` : "",
+    missingFeeder ? `${missingFeeder} missing feeder` : "",
+    missingToPole ? `${missingToPole} missing to-pole` : ""
+  ].filter(Boolean);
+  return issues.length ? ` Data check: ${issues.join(", ")}.` : " Data check: key fields look complete.";
 }
 
 async function importSpanFiles(){
   const files = [...spanFileInput.files];
 
   if(!files.length){
-    updateSpanDataStatus("Choose one or more CSV/XLSX files first.");
+    setElementStatus(spanDataStatus, "Choose one or more CSV/XLSX files first.", "error");
     return;
   }
 
   try{
     const imported = [];
+    let totalRows = 0;
 
     for(const file of files){
       const rows = await readSpanFile(file);
+      totalRows += rows.length;
       imported.push(...rows.map(normaliseImportedSpan).filter(Boolean));
     }
 
     if(!imported.length){
-      updateSpanDataStatus("No usable span rows found in those files.");
+      setElementStatus(spanDataStatus, "No usable span rows found. Check the file has a grid reference or usable latitude/longitude.", "error");
       return;
     }
 
@@ -2796,23 +3229,32 @@ async function importSpanFiles(){
     localStorage.setItem("treeSurveySpanData", JSON.stringify(imported));
     currentSpanMatches = [];
     spanSearchResults.innerHTML = "";
-    updateSpanDataStatus(`${imported.length} spans imported.`);
+    const skipped = Math.max(0, totalRows - imported.length);
+    updateSpanDataStatus(`${imported.length} spans imported${skipped ? `, ${skipped} rows skipped because they could not be plotted` : ""}.`);
     if(surveyMap) renderSurveyMap(true);
+    setElementStatus(spanDataStatus, `${spanDataStatus.textContent}${spanDataQualitySummary(imported)}`, skipped ? "" : "success");
   }catch(error){
-    updateSpanDataStatus(error.message || "Could not import that spreadsheet.");
+    setElementStatus(spanDataStatus, error.message || "Could not import that spreadsheet.", "error");
   }
 }
 
 function clearSpanData(){
+  const count = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA.length : 0;
+  if(count || mapDrawingStack.length || manualMapLinks.length){
+    const ok = window.confirm("Clear imported spans, map links and map drawings from this device?");
+    if(!ok) return;
+  }
   localStorage.removeItem("treeSurveySpanData");
   localStorage.removeItem("treeSurveyManualMapLinks");
   localStorage.removeItem("treeSurveyBlockedAutoMapLinks");
+  localStorage.removeItem("treeSurveyMapDrawings");
   window.SPAN_DATA = [];
   manualMapLinks = [];
   blockedAutoMapLinks = [];
   pendingLinkPoleId = null;
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
+  clearMapDrawings(false);
   if(surveyPoleLayer) surveyPoleLayer.clearLayers();
   if(surveyLineLayer) surveyLineLayer.clearLayers();
   surveyLineShapes = [];
@@ -2918,30 +3360,101 @@ function parseCsvRows(text){
 }
 
 function normaliseImportedSpan(row){
-  const toPole = getRowValue(row, ["ToPole", "To Pole", "toPole"]);
-  const networkNumber = getRowValue(row, ["Network Number", "Network No", "NetworkNumber", "networkNumber"]);
+  const toPole = getSpanRowValue(row, "toPole", ["ToPole", "To Pole", "toPole"]);
+  const networkNumber = getSpanRowValue(row, "networkNumber", ["Network Number", "Network No", "NetworkNumber", "networkNumber"]);
 
   const span = {
-    primaryNo:getRowValue(row, ["Primary No", "PrimaryNo", "primaryNo", "Network Number", "Network No", "NetworkNumber"]),
-    primaryName:getRowValue(row, ["Primary Name", "PrimaryName", "primaryName"]),
-    hvFeeder:getRowValue(row, ["HV Feeder", "HVFeeder", "hvFeeder"]),
-    feederName:getRowValue(row, ["Feeder Name", "FeederName", "feederName"]),
-    distNo:getRowValue(row, ["Dist No", "DistNo", "distNo"]),
-    circuitName:getRowValue(row, ["circuitName", "Circuit Name", "CircuitName", "Contract"]),
-    voltage:getRowValue(row, ["V", "Voltage", "voltage"]),
-    span:getRowValue(row, ["Span", "span", "spanId"]) || toPole,
+    primaryNo:getSpanRowValue(row, "primaryNo", ["Primary No", "PrimaryNo", "primaryNo", "Network Number", "Network No", "NetworkNumber"]),
+    primaryName:getSpanRowValue(row, "primaryName", ["Primary Name", "PrimaryName", "primaryName"]),
+    hvFeeder:getSpanRowValue(row, "hvFeeder", ["HV Feeder", "HVFeeder", "hvFeeder"]),
+    feederName:getSpanRowValue(row, "feederName", ["Feeder Name", "FeederName", "feederName"]),
+    distNo:getSpanRowValue(row, "distNo", ["Dist No", "DistNo", "distNo"]),
+    circuitName:getSpanRowValue(row, "circuitName", ["circuitName", "Circuit Name", "CircuitName", "Contract"]),
+    voltage:getSpanRowValue(row, "voltage", ["V", "Voltage", "voltage"]),
+    span:getSpanRowValue(row, "span", ["Span", "span", "spanId"]) || toPole,
     toPole,
-    externalReference:getRowValue(row, ["ExternalReference", "External Reference", "externalReference"]),
+    externalReference:getSpanRowValue(row, "externalReference", ["ExternalReference", "External Reference", "externalReference"]),
     networkNumber,
-    gridRef:getRowValue(row, ["Grid Ref", "GridRef", "gridRef", "Grid Reference", "GridReference"]),
-    latitude:parseCoordinateNumber(getRowValue(row, ["latitude", "Latitude", "lat"])),
-    longitude:parseCoordinateNumber(getRowValue(row, ["longitude", "Longitude", "lon", "lng"]))
+    gridRef:getSpanRowValue(row, "gridRef", ["Grid Ref", "GridRef", "gridRef", "Grid Reference", "GridReference"]),
+    latitude:parseCoordinateNumber(getSpanRowValue(row, "latitude", ["latitude", "Latitude", "lat"])),
+    longitude:parseCoordinateNumber(getSpanRowValue(row, "longitude", ["longitude", "Longitude", "lon", "lng"]))
   };
 
   if(!span.span && !span.toPole && !span.gridRef) return null;
   const repaired = repairSpanPosition(span);
   if(!isUsableCoordinate(repaired.latitude, repaired.longitude)) return null;
   return repaired;
+}
+
+function getSpanRowValue(row, field, names){
+  const exact = getRowValue(row, names);
+  if(exact) return exact;
+
+  const candidates = Object.keys(row)
+    .map((key) => ({
+      key,
+      value:String(row[key] ?? "").trim(),
+      score:scoreSpanColumn(field, key, row[key])
+    }))
+    .filter((candidate) => candidate.value && candidate.score >= 45)
+    .sort((a, b) => b.score - a.score);
+
+  return candidates[0]?.value || "";
+}
+
+function scoreSpanColumn(field, key, value){
+  const header = normaliseHeader(key);
+  const headerText = normaliseSearchText(key);
+  const text = String(value ?? "").trim();
+  const compact = compactSearchText(text);
+  let score = 0;
+
+  const hasAny = (items) => items.some((item) => header.includes(item) || headerText.includes(item));
+  const hasAll = (items) => items.every((item) => header.includes(item) || headerText.includes(item));
+
+  if(field === "gridRef"){
+    if(hasAny(["gridref","gridreference","ngr","osgrid","sitegrid"])) score += 90;
+    if(/^[A-Z]{2}\s*\d{3,6}\s*\d{3,6}$/i.test(text) || /^[A-Z]{2}\d{6,12}$/i.test(compact)) score += 80;
+  }else if(field === "latitude"){
+    if(hasAny(["latitude","lat"])) score += 90;
+    const number = parseCoordinateNumber(text);
+    if(number >= 49 && number <= 61) score += 45;
+  }else if(field === "longitude"){
+    if(hasAny(["longitude","long","lng","lon"])) score += 90;
+    const number = parseCoordinateNumber(text);
+    if(number >= -9 && number <= 2) score += 45;
+  }else if(field === "voltage"){
+    if(hasAny(["voltage","volt","kv"]) || header === "v") score += 85;
+    if(/\b(LV|HV|11\s*kV|33\s*kV|66\s*kV|132\s*kV)\b/i.test(text)) score += 60;
+  }else if(field === "toPole"){
+    if(hasAny(["topole","poleto","pole","structure","asset"])) score += 80;
+    if(/^[A-Z]{2,6}\s*\d+[A-Z]?$/i.test(text) || /^[A-Z0-9]+\/\d+$/i.test(text)) score += 45;
+  }else if(field === "span"){
+    if(hasAny(["span","spanid","section","lineno","linenumber"])) score += 90;
+    if(/^[A-Z0-9-]+\/?\d*[A-Z]?$/i.test(text) && /\d/.test(text)) score += 40;
+  }else if(field === "primaryNo"){
+    if(hasAll(["primary","no"]) || hasAll(["primary","number"]) || hasAny(["primaryno","primarynumber","networknumber","networkno"])) score += 90;
+    if(/^\d{2,6}(\/\d{1,6})?$/.test(text)) score += 35;
+  }else if(field === "primaryName"){
+    if(hasAll(["primary","name"]) || hasAll(["sub","name"]) || hasAny(["primaryname","substationname"])) score += 90;
+    if(/[A-Za-z]{3,}/.test(text) && !/\b(LV|HV|kV)\b/i.test(text)) score += 25;
+  }else if(field === "hvFeeder"){
+    if(hasAll(["hv","feeder"]) || hasAll(["11kv","feeder"]) || hasAny(["hvfeeder"])) score += 95;
+    if(/\b(HV|11\s*kV|33\s*kV)\b/i.test(text)) score += 30;
+  }else if(field === "feederName"){
+    if(hasAll(["feeder","name"]) || hasAny(["feedername"])) score += 90;
+  }else if(field === "distNo"){
+    if(hasAny(["distno","distributionno","distributionsubno","lvsubno"]) || hasAll(["dist","no"]) || hasAll(["sub","no"])) score += 90;
+    if(/^\d{2,6}$/.test(text)) score += 25;
+  }else if(field === "circuitName"){
+    if(hasAny(["circuitname","contract","lvsubname"]) || hasAll(["circuit","name"])) score += 90;
+  }else if(field === "externalReference"){
+    if(hasAny(["externalreference","externalref","reference","ref"])) score += 85;
+  }else if(field === "networkNumber"){
+    if(hasAny(["networknumber","networkno","assetnumber"])) score += 90;
+  }
+
+  return score;
 }
 
 function getRowValue(row, names){
@@ -3046,8 +3559,14 @@ function searchSpan(event){
   event.preventDefault();
   const query = spanSearchInput.value.trim();
 
+  if(!Array.isArray(window.SPAN_DATA) || !window.SPAN_DATA.length){
+    setElementStatus(spanSearchStatus, "Import a span spreadsheet before searching.", "error");
+    spanSearchResults.innerHTML = "";
+    return;
+  }
+
   if(!query){
-    spanSearchStatus.textContent = "Enter a span, pole, feeder, circuit, primary, or grid reference.";
+    setElementStatus(spanSearchStatus, "Enter a span, pole, feeder, circuit, primary, or grid reference.", "error");
     spanSearchResults.innerHTML = "";
     return;
   }
@@ -3056,13 +3575,13 @@ function searchSpan(event){
   currentSpanMatches = matches;
 
   if(!matches.length){
-    spanSearchStatus.textContent = `No matches found for "${query}".`;
+    setElementStatus(spanSearchStatus, `No matches found for "${query}".`, "error");
     currentSpanMatches = [];
     spanSearchResults.innerHTML = "";
     return;
   }
 
-  spanSearchStatus.textContent = `${matches.length} best match${matches.length === 1 ? "" : "es"} for "${query}".`;
+  setElementStatus(spanSearchStatus, `${matches.length} best match${matches.length === 1 ? "" : "es"} for "${query}".`);
   spanSearchResults.innerHTML = matches.map((span, index) => renderSpanSearchResult(span, index)).join("");
 }
 
@@ -3201,7 +3720,7 @@ function fillFromSpanRecord(span){
   const position = getSpanMapPosition(span);
 
   if(!position){
-    spanSearchStatus.textContent = "That span has no usable map position. Add latitude/longitude or grid ref.";
+    setElementStatus(spanSearchStatus, "That span has no usable map position. Add latitude/longitude or grid ref.", "error");
     return;
   }
 
@@ -3219,7 +3738,7 @@ function fillFromSpanRecord(span){
     sourceNote: "Filled from your uploaded span spreadsheet."
   });
 
-  spanSearchStatus.textContent = `Filled from ${span.voltage || "span"} ${span.span || ""}.`;
+  setElementStatus(spanSearchStatus, `Filled from ${span.voltage || "span"} ${span.span || ""}.`, "success");
   spanSearchInput.value = "";
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
@@ -3297,7 +3816,7 @@ function renderNearestSpanChoice(span, index){
   ].filter(Boolean);
 
   return `
-    <article class="card" id="nearest-span-${index}">
+    <article class="card span-match-card" id="nearest-span-${index}" role="button" tabindex="0" onclick="useSpanFromLocate(${index})" onkeydown="handleLocateCardKey(event, ${index})">
       <h2>${index + 1} nearest</h2>
       <div class="value">${escapeHtml(mainValue)}</div>
       ${detailParts.length ? `<div class="detail">${escapeHtml(detailParts.join(" - "))}</div>` : ""}
@@ -3305,9 +3824,16 @@ function renderNearestSpanChoice(span, index){
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([`<button class="small primary" type="button" onclick="useSpanFromLocate(${index})">Use this span</button>`, copyButton("Copy span info", spanCopyText(span))])}
+      <div class="detail">Tap to select this span.</div>
+      ${actions([copyButton("Copy span info", spanCopyText(span))])}
     </article>
   `;
+}
+
+function handleLocateCardKey(event, index){
+  if(event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  useSpanFromLocate(index);
 }
 
 function renderLocationCards(options){
@@ -3358,7 +3884,8 @@ function renderW3WCard(lat, lon, gridRef){
       <div class="map-panel">
         <div id="w3wMap" aria-label="what3words marker map"></div>
         <div class="marker-row">
-          <input class="text-field" id="w3wKeyInput" type="password" value="${escapeHtml(storedKey)}" placeholder="what3words API key">
+          <label class="sr-only" for="w3wKeyInput">what3words API key</label>
+          <input class="text-field" id="w3wKeyInput" type="password" value="${escapeHtml(storedKey)}" placeholder="what3words API key" autocomplete="off">
           <button class="small" type="button" onclick="saveW3WKey()">Save key</button>
         </div>
       </div>
@@ -3374,7 +3901,14 @@ function renderW3WCard(lat, lon, gridRef){
 
 function renderAECard(lat, lon){
   const ae = findNearestAE(lat, lon);
-  if(!ae) return "";
+  if(!ae){
+    return card(
+      "ae",
+      "Nearest A&E",
+      "No A&E data available",
+      "A&E lookup uses the bundled hospital list. Check ae-data.csv is uploaded with the app."
+    );
+  }
 
   const mapsQuery = ae.mapsLink || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${ae.name} ${ae.address}`.trim())}`;
   const directions = `https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${encodeURIComponent(`${ae.name} ${ae.address}`.trim())}`;
@@ -3503,7 +4037,7 @@ function findNearestSpans(lat, lon, limit=5){
 
 function renderSpanCard(span, title="Nearest span from your data"){
   if(!span){
-    return card("span","Nearest span","No span data loaded","Import a span spreadsheet to enable span autofill.");
+    return card("span","Selected span","No span selected","Import/search your span spreadsheet or use Locate to choose a nearby span.");
   }
   const detail = Number.isFinite(span.distanceM) && span.distanceM > 0
     ? `${span.distanceM} m away`
@@ -3514,6 +4048,7 @@ function renderSpanCard(span, title="Nearest span from your data"){
       <h2>${escapeHtml(title)}</h2>
       <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
       <div class="detail">${escapeHtml(detail)}</div>
+      <div class="state-pill">Selected for paperwork and map centering</div>
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(primarySubValue(span) || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
