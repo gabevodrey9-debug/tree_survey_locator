@@ -429,7 +429,7 @@ body.map-mode #surveyMap{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(10,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(11,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -552,9 +552,30 @@ body.map-mode #surveyMap{
 }
 .pole-popup-actions{
   display:grid;
-  grid-template-columns:1fr 1fr;
+  grid-template-columns:repeat(3,minmax(0,1fr));
   gap:6px;
   margin-top:8px;
+}
+.field-popup{
+  min-width:220px;
+}
+.field-popup-title{
+  font-weight:800;
+  color:var(--forest);
+  margin-bottom:4px;
+}
+.field-popup-detail{
+  color:#47564c;
+  font-size:13px;
+  line-height:1.35;
+  margin-top:4px;
+  white-space:pre-wrap;
+}
+.field-popup-actions{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin-top:10px;
 }
 .pole-popup-actions button{
   min-height:36px;
@@ -704,6 +725,7 @@ a.primary,button.primary{
       <div class="map-toolbar">
         <button class="small" id="tool-tree" type="button" onclick="setMapTool('tree')" aria-label="Place one tree" data-full-label="Tree" data-icon-key="tree">Tree</button>
         <button class="small" id="tool-group" type="button" onclick="setMapTool('group')" aria-label="Draw a tree group" data-full-label="Group" data-icon-key="group">Group</button>
+        <button class="small" id="tool-field" type="button" onclick="setMapTool('field')" aria-label="Draw field boundary" data-full-label="Field" data-icon-key="field">Field</button>
         <button class="small" id="tool-pole" type="button" onclick="setMapTool('pole')" aria-label="Add missing pole" data-full-label="Add pole" data-icon-key="pole">Add pole</button>
         <button class="small" id="tool-link" type="button" onclick="setMapTool('link')" aria-label="Link two poles" data-full-label="Link" data-icon-key="link">Link</button>
         <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')" aria-label="Unlink two poles" data-full-label="Unlink" data-icon-key="unlink">Unlink</button>
@@ -712,6 +734,11 @@ a.primary,button.primary{
         <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')" aria-label="Delete selected map item" data-full-label="Delete" data-icon-key="delete">Delete</button>
         <button class="small" type="button" onclick="undoMapDrawing()" aria-label="Undo last map mark" data-full-label="Undo" data-icon-key="undo">Undo</button>
         <button class="small primary" type="button" onclick="captureSurveyMapScreenshot()" aria-label="Save or share map screenshot" data-full-label="Screenshot" data-icon-key="screenshot">Screenshot</button>
+      </div>
+      <input class="sr-only" id="boundaryFileInput" type="file" accept=".geojson,.json,application/geo+json,application/json" onchange="importBoundaryLayerFile(event)">
+      <div class="map-actions boundary-actions">
+        <button class="small" type="button" onclick="document.getElementById('boundaryFileInput').click()">Import boundaries</button>
+        <button class="small" type="button" onclick="exportBoundaryLayer()">Export boundaries</button>
       </div>
     </section>
     <section class="card map-canvas-card">
@@ -741,10 +768,12 @@ const viewSwitchBtn = document.getElementById("viewSwitchBtn");
 const surveyMapStatus = document.getElementById("surveyMapStatus");
 const surveyMapStage = document.getElementById("surveyMapStage");
 const mapSpanSearchInput = document.getElementById("mapSpanSearchInput");
+const boundaryFileInput = document.getElementById("boundaryFileInput");
 const USE_COMPACT_MAP_TOOL_LABELS = true;
 const MAP_TOOL_ICONS = {
   tree:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l-5 6h2.5L6 14h4v5.5h4V14h4l-3.5-4.5H17l-5-6z"/><path d="M8.5 20h7"/></svg>`,
   group:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5l-3.5 4.5h1.8L4 13h3v5h2.4v-5h3L10 9.5h1.5L8 5z"/><path d="M16 4l-4 5h2l-2.8 4h3.3v6H17v-6h3.3L17.5 9H20l-4-5z"/><path d="M5.5 20h14"/></svg>`,
+  field:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7.5l5-2.5 4.5 2 6.5-2v12l-6.5 2-4.5-2-5 2.5z"/><path d="M9 5v12"/><path d="M13.5 7v12"/></svg>`,
   pole:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="14" r="4"/><path d="M17 5v7"/><path d="M13.5 8.5h7"/></svg>`,
   link:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></svg>`,
   unlink:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h1.5"/><path d="M14 12h.5"/><path d="M12 7l-1 3"/><path d="M13 14l-1 3"/></svg>`,
@@ -766,6 +795,7 @@ let surveySatelliteLayer = null;
 let surveyIsSatellite = false;
 let surveyPoleLayer = null;
 let surveyLineLayer = null;
+let surveyFieldLayer = null;
 let surveyLineCanvas = null;
 let surveyLineCanvasCtx = null;
 let surveyLineShapes = [];
@@ -790,6 +820,9 @@ let drawCounters = { tree:0, group:0 };
 let activeRoute = null;
 let activeRoutePoints = [];
 let restoringMapDrawings = false;
+let fieldBookContacts = [];
+let fieldBookFields = [];
+let selectedFieldOwnerId = null;
 window.SPAN_DATA = [];
 window.AE_DATA = [];
 
@@ -797,6 +830,7 @@ locateBtn.addEventListener("click", locate);
 loadStoredSpanData();
 loadStoredManualMapLinks();
 loadStoredBlockedAutoMapLinks();
+loadStoredFieldBook();
 loadBundledAEData();
 applyMapToolbarLabelMode();
 
@@ -853,6 +887,10 @@ function actions(items){
 
 function linkButton(label, href, primary=false){
   return `<a class="small ${primary ? "primary" : ""}" href="${href}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+}
+
+function buttonHtml(label, onclick, primary=false){
+  return `<button class="small ${primary ? "primary" : ""}" type="button" onclick="event.stopPropagation(); ${onclick}">${escapeHtml(label)}</button>`;
 }
 
 function copyButton(label, value){
@@ -969,6 +1007,7 @@ function initSurveyMap(attempts=0){
   updateBaseMapButtons();
 
   surveyLineLayer = L.layerGroup().addTo(surveyMap);
+  surveyFieldLayer = L.layerGroup().addTo(surveyMap);
   surveyPoleLayer = L.layerGroup().addTo(surveyMap);
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   installSurveyLineCanvas(mapEl);
@@ -986,6 +1025,7 @@ function initSurveyMap(attempts=0){
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
   renderSurveyMap(true);
+  renderFieldBookLayer();
   restoreMapDrawings();
 }
 
@@ -1140,6 +1180,7 @@ async function captureSurveyMapScreenshot(){
       allowTaint:false,
       ignoreElements:(el) => Boolean(el.closest?.(".leaflet-control"))
     });
+    drawSurveyVectorsOnScreenshot(canvas, mapEl);
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     const file = blob ? new File([blob], `survey-map-${new Date().toISOString().slice(0, 10)}.png`, { type:"image/png" }) : null;
     if(file && navigator.canShare?.({ files:[file] }) && navigator.share){
@@ -1161,6 +1202,134 @@ async function captureSurveyMapScreenshot(){
   }catch{
     enterMapScreenshotMode();
   }
+}
+
+function drawSurveyVectorsOnScreenshot(canvas, mapEl){
+  if(!canvas || !surveyMap || !mapEl) return;
+  const ctx = canvas.getContext("2d");
+  if(!ctx) return;
+
+  const rect = mapEl.getBoundingClientRect();
+  const scaleX = canvas.width / Math.max(1, rect.width);
+  const scaleY = canvas.height / Math.max(1, rect.height);
+  ctx.save();
+  ctx.scale(scaleX, scaleY);
+  drawFieldBookVectors(ctx);
+  drawMapMarkVectors(ctx);
+  ctx.restore();
+}
+
+function drawFieldBookVectors(ctx){
+  for(const field of fieldBookFields){
+    const points = (field.boundary || [])
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+      .map((point) => surveyMap.latLngToContainerPoint([point.lat, point.lng]));
+    if(points.length < 3) continue;
+
+    const owner = fieldOwnerById(field.ownerId);
+    const selected = selectedFieldOwnerId && selectedFieldOwnerId === field.ownerId;
+    drawScreenshotPolygon(ctx, points, {
+      stroke:selected ? "#3d7a4f" : owner ? "#d4910a" : "#6d7f73",
+      fill:selected ? "rgba(61,122,79,.18)" : owner ? "rgba(212,145,10,.11)" : "rgba(109,127,115,.11)",
+      width:selected ? 4 : 3
+    });
+  }
+}
+
+function drawMapMarkVectors(ctx){
+  for(const item of mapDrawingStack){
+    if(item?.group && item.shape){
+      if(item.type === "circle" && item.shape.getLatLng && item.shape.getRadius){
+        const center = surveyMap.latLngToContainerPoint(item.shape.getLatLng());
+        const edge = surveyMap.latLngToContainerPoint(destinationPoint(item.shape.getLatLng(), item.shape.getRadius(), 90));
+        const radius = Math.max(1, Math.hypot(edge.x - center.x, edge.y - center.y));
+        drawScreenshotCircle(ctx, center, radius, {
+          stroke:"#5fbd65",
+          fill:"rgba(95,189,101,.01)",
+          width:5
+        });
+      }else if(item.shape.getLatLngs){
+        const points = getPolygonCorners(item).map((point) => surveyMap.latLngToContainerPoint(point));
+        drawScreenshotPolygon(ctx, points, {
+          stroke:"#5fbd65",
+          fill:"rgba(95,189,101,.01)",
+          width:5
+        });
+      }
+    }else if(item?.itemType === "route" && item.getLatLngs){
+      const points = item.getLatLngs().map((point) => surveyMap.latLngToContainerPoint(point));
+      drawScreenshotPolyline(ctx, points, {
+        stroke:"#f4c430",
+        width:5
+      });
+    }
+  }
+}
+
+function drawScreenshotCircle(ctx, center, radius, style){
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = style.fill || "transparent";
+  ctx.strokeStyle = style.stroke;
+  ctx.lineWidth = style.width || 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if(style.fill) ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawScreenshotPolygon(ctx, points, style){
+  if(points.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for(const point of points.slice(1)){
+    ctx.lineTo(point.x, point.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = style.fill || "transparent";
+  ctx.strokeStyle = style.stroke;
+  ctx.lineWidth = style.width || 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  if(style.fill) ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawScreenshotPolyline(ctx, points, style){
+  if(points.length < 2) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for(const point of points.slice(1)){
+    ctx.lineTo(point.x, point.y);
+  }
+  ctx.strokeStyle = style.stroke;
+  ctx.lineWidth = style.width || 3;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  ctx.stroke();
+  ctx.restore();
+}
+
+function destinationPoint(start, metres, bearingDegrees){
+  const radius = 6371000;
+  const bearing = bearingDegrees * Math.PI / 180;
+  const lat1 = start.lat * Math.PI / 180;
+  const lon1 = start.lng * Math.PI / 180;
+  const angularDistance = metres / radius;
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angularDistance) +
+    Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing)
+  );
+  const lon2 = lon1 + Math.atan2(
+    Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat1),
+    Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+  );
+  return L.latLng(lat2 * 180 / Math.PI, lon2 * 180 / Math.PI);
 }
 
 function enterMapScreenshotMode(){
@@ -1238,7 +1407,7 @@ function installSurveyTouchHandlers(mapEl){
       return;
     }
 
-    if(!surveyMap || !mapLocked || mapTool !== "group") return;
+    if(!surveyMap || !mapLocked || !["group","field"].includes(mapTool)) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();
@@ -1247,10 +1416,10 @@ function installSurveyTouchHandlers(mapEl){
     strokeMoved = false;
     strokePoints = [surveyMap.containerPointToLatLng(L.point(event.clientX, event.clientY))];
     activeStrokePreview = L.polyline(strokePoints, {
-      color:"#5fbd65",
-      weight:5,
+      color:mapTool === "field" ? "#d4910a" : "#5fbd65",
+      weight:mapTool === "field" ? 4 : 5,
       opacity:0.95,
-      dashArray:"8 6",
+      dashArray:mapTool === "field" ? "" : "8 6",
       interactive:false
     }).addTo(surveyDrawingLayer);
   }, { passive:false, capture:true });
@@ -1595,6 +1764,15 @@ function buildPolePopup(point){
   const actions = document.createElement("div");
   actions.className = "pole-popup-actions";
 
+  const maps = document.createElement("button");
+  maps.type = "button";
+  maps.textContent = "Maps";
+  maps.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(googleMapsUrl(point.lat, point.lon, point.label), "_blank", "noopener");
+  });
+
   const rename = document.createElement("button");
   rename.type = "button";
   rename.textContent = "Rename";
@@ -1614,7 +1792,7 @@ function buildPolePopup(point){
     removeMapPole(point.span.mapPoleId);
   });
 
-  actions.append(rename, remove);
+  actions.append(maps, rename, remove);
   wrap.appendChild(actions);
   return wrap;
 }
@@ -2291,13 +2469,13 @@ function createId(prefix){
 }
 
 function setMapTool(tool, force=false){
-  if(!force && ["pole","tree","group","link"].includes(tool) && mapTool === tool){
+  if(!force && ["pole","tree","group","field","link"].includes(tool) && mapTool === tool){
     tool = "pan";
   }
   mapTool = tool;
   if(tool !== "link" && tool !== "unlink") pendingLinkPoleId = null;
   updateMapMovementForTool();
-  for(const id of ["pan","pole","tree","group","link","unlink","route","label","delete"]){
+  for(const id of ["pan","pole","tree","group","field","link","unlink","route","label","delete"]){
     const button = document.getElementById(`tool-${id}`);
     if(button){
       const active = id === tool;
@@ -2310,6 +2488,7 @@ function setMapTool(tool, force=false){
     pole:"Tap where the missing pole should go.",
     tree:"Tap once to place a single tree circle.",
     group:"Draw around the group. The app will tidy it into the closest shape.",
+    field:"Draw the field boundary. Add the landowner when you lift your finger.",
     link:"Tap one pole, then tap the pole it should link to.",
     unlink:"Tap one pole, then tap the pole it should unlink from.",
     route:"Tap along the access route. Press Finish route when done.",
@@ -2325,7 +2504,7 @@ function updateMapMovementForTool(){
 
 function syncMapMovementState(){
   if(!surveyMap) return;
-  if(mapLocked && (mapTool === "group" || selectedDrawing)){
+  if(mapLocked && (mapTool === "group" || mapTool === "field" || selectedDrawing)){
     disableSurveyMapMovement();
   }else{
     enableSurveyMapMovement();
@@ -2371,6 +2550,10 @@ function applySurveyMapTool(latlng){
 
 function addSurveyShapeFromStroke(kind, points, wasDrawn=false){
   if(!points.length || !surveyDrawingLayer) return;
+  if(kind === "field"){
+    addFieldBoundaryFromStroke(points);
+    return;
+  }
   const shapeType = wasDrawn ? closestStrokeShape(points) : "circle";
   if(shapeType === "rectangle") addSurveyRectangleShape(kind, points);
   else addSurveyCircleShape(kind, points);
@@ -2512,9 +2695,9 @@ function orientedStrokeRectangle(points){
     };
   }
 
-  const pixelPoints = points.map((point) => surveyMap.latLngToContainerPoint(point));
+  const pixelPoints = trimStrokePixelOutliers(points.map((point) => surveyMap.latLngToContainerPoint(point)));
   const metrics = orientedStrokeMetrics(pixelPoints);
-  const pad = Math.max(4, Math.min(12, Math.min(metrics.width, metrics.height) * 0.12));
+  const pad = Math.max(1.5, Math.min(5, Math.min(metrics.width, metrics.height) * 0.045));
   const minAlong = metrics.minAlong - pad;
   const maxAlong = metrics.maxAlong + pad;
   const minAcross = metrics.minAcross - pad;
@@ -2530,6 +2713,13 @@ function orientedStrokeRectangle(points){
     center:surveyMap.containerPointToLatLng(L.point(metrics.center.x, metrics.center.y)),
     corners:cornerPixels.map((point) => surveyMap.containerPointToLatLng(L.point(point.x, point.y)))
   };
+}
+
+function trimStrokePixelOutliers(pixelPoints){
+  if(pixelPoints.length < 12) return pixelPoints;
+  const start = Math.max(0, Math.floor(pixelPoints.length * 0.04));
+  const end = Math.min(pixelPoints.length, Math.ceil(pixelPoints.length * 0.96));
+  return pixelPoints.slice(start, end);
 }
 
 function orientedStrokeMetrics(pixelPoints){
@@ -2565,15 +2755,15 @@ function orientedStrokeMetrics(pixelPoints){
   let minAcross = Math.min(...projections.map((point) => point.across));
   let maxAcross = Math.max(...projections.map((point) => point.across));
 
-  if(maxAlong - minAlong < 18){
+  if(maxAlong - minAlong < 12){
     const mid = (maxAlong + minAlong) / 2;
-    minAlong = mid - 9;
-    maxAlong = mid + 9;
+    minAlong = mid - 6;
+    maxAlong = mid + 6;
   }
-  if(maxAcross - minAcross < 18){
+  if(maxAcross - minAcross < 12){
     const mid = (maxAcross + minAcross) / 2;
-    minAcross = mid - 9;
-    maxAcross = mid + 9;
+    minAcross = mid - 6;
+    maxAcross = mid + 6;
   }
 
   return {
@@ -3128,6 +3318,388 @@ function clearMapDrawings(showMessage=true){
   drawCounters = { tree:0, group:0 };
   saveMapDrawings();
   if(showMessage) setSurveyMapStatus("Map markings cleared.");
+}
+
+function loadStoredFieldBook(){
+  try{
+    const contacts = JSON.parse(localStorage.getItem("treeSurveyFieldBookContacts") || "[]");
+    const fields = JSON.parse(localStorage.getItem("treeSurveyFieldBookFields") || "[]");
+    fieldBookContacts = Array.isArray(contacts)
+      ? contacts.filter((owner) => owner?.id && owner?.name)
+      : [];
+    fieldBookFields = Array.isArray(fields)
+      ? fields.filter((field) => field?.id && Array.isArray(field.boundary) && field.boundary.length >= 3)
+      : [];
+  }catch{
+    fieldBookContacts = [];
+    fieldBookFields = [];
+  }
+}
+
+function persistFieldBook(){
+  try{
+    localStorage.setItem("treeSurveyFieldBookContacts", JSON.stringify(fieldBookContacts));
+    localStorage.setItem("treeSurveyFieldBookFields", JSON.stringify(fieldBookFields));
+  }catch{
+    setSurveyMapStatus("Field book changed, but this browser could not save it locally.");
+  }
+}
+
+function addFieldBoundaryFromStroke(points){
+  if(!surveyFieldLayer || points.length < 4){
+    setSurveyMapStatus("Draw around the field boundary before lifting your finger.");
+    return;
+  }
+
+  const boundary = simplifyFieldBoundary(points).map(compactLatLng);
+  if(boundary.length < 3){
+    setSurveyMapStatus("That field outline was too small to save.");
+    return;
+  }
+
+  const owner = findOrCreateFieldOwner();
+  if(!owner){
+    setSurveyMapStatus("Field boundary cancelled.");
+    return;
+  }
+
+  const field = {
+    id:createId("field"),
+    ownerId:owner.id,
+    boundary,
+    createdAt:new Date().toISOString()
+  };
+  fieldBookFields.push(field);
+  selectedFieldOwnerId = owner.id;
+  persistFieldBook();
+  renderFieldBookLayer();
+  setMapTool("pan");
+  setSurveyMapStatus(`Field saved for ${owner.name}. Tap any of their fields to bring the contact back.`);
+}
+
+function simplifyFieldBoundary(points){
+  if(!surveyMap) return points;
+  const output = [];
+  let lastPixel = null;
+  for(const point of points){
+    const pixel = surveyMap.latLngToContainerPoint(point);
+    if(!lastPixel || Math.hypot(pixel.x - lastPixel.x, pixel.y - lastPixel.y) >= 10){
+      output.push(point);
+      lastPixel = pixel;
+    }
+  }
+
+  if(output.length > 90){
+    const step = Math.ceil(output.length / 90);
+    return output.filter((_, index) => index % step === 0);
+  }
+  return output;
+}
+
+function findOrCreateFieldOwner(){
+  const name = (window.prompt("Landowner name") || "").trim();
+  if(!name) return null;
+
+  const existing = fieldBookContacts.find((owner) => normaliseSearchText(owner.name) === normaliseSearchText(name));
+  if(existing) return existing;
+
+  const owner = {
+    id:createId("owner"),
+    name,
+    phone:(window.prompt("Phone number", "") || "").trim(),
+    address:(window.prompt("Address", "") || "").trim(),
+    postcode:(window.prompt("Postcode", "") || "").trim(),
+    notes:(window.prompt("Notes / access details", "") || "").trim()
+  };
+  fieldBookContacts.push(owner);
+  return owner;
+}
+
+function renderFieldBookLayer(){
+  if(!surveyFieldLayer || !window.L) return;
+  surveyFieldLayer.clearLayers();
+
+  for(const field of fieldBookFields){
+    const points = field.boundary.map((point) => L.latLng(point.lat, point.lng));
+    if(points.length < 3) continue;
+
+    const owner = fieldOwnerById(field.ownerId);
+    const isSelectedOwner = selectedFieldOwnerId && selectedFieldOwnerId === field.ownerId;
+    const layer = L.polygon(points, {
+      color:isSelectedOwner ? "#3d7a4f" : owner ? "#d4910a" : "#6d7f73",
+      weight:isSelectedOwner ? 4 : 3,
+      opacity:0.95,
+      fill:true,
+      fillColor:isSelectedOwner ? "#3d7a4f" : owner ? "#d4910a" : "#6d7f73",
+      fillOpacity:isSelectedOwner ? 0.18 : 0.11,
+      className:"field-book-boundary"
+    }).addTo(surveyFieldLayer);
+    layer.fieldBookId = field.id;
+
+    layer.on("click", (event) => {
+      L.DomEvent.stop(event);
+      selectedFieldOwnerId = field.ownerId || null;
+      renderFieldBookLayer();
+      const refreshedLayer = findFieldLayer(field.id);
+      const popupLayer = refreshedLayer || layer;
+      popupLayer.bindPopup(buildFieldPopup(field, owner), {
+        closeButton:true,
+        autoPan:true,
+        maxWidth:280
+      }).openPopup(event.latlng);
+      setSurveyMapStatus(owner
+        ? `${owner.name} selected. Matching fields are highlighted.`
+        : "Boundary selected. Add a landowner when you know who it belongs to.");
+    });
+  }
+}
+
+function findFieldLayer(fieldId){
+  if(!surveyFieldLayer) return null;
+  let match = null;
+  surveyFieldLayer.eachLayer((layer) => {
+    if(layer.fieldBookId === fieldId) match = layer;
+  });
+  return match;
+}
+
+function fieldOwnerById(ownerId){
+  return fieldBookContacts.find((owner) => owner.id === ownerId) || null;
+}
+
+function fieldById(fieldId){
+  return fieldBookFields.find((field) => field.id === fieldId) || null;
+}
+
+function buildFieldPopup(field, owner){
+  const ownerName = owner?.name || "Unknown landowner";
+  const details = [
+    owner?.phone ? `Phone: ${owner.phone}` : "",
+    owner?.address ? `Address: ${owner.address}` : "",
+    owner?.postcode ? `Postcode: ${owner.postcode}` : "",
+    owner?.notes ? `Notes: ${owner.notes}` : ""
+  ].filter(Boolean).join("\n") || "No contact details saved yet.";
+
+  return `
+    <div class="field-popup">
+      <div class="field-popup-title">${escapeHtml(owner ? ownerName : "Unassigned boundary")}</div>
+      <div class="field-popup-detail">${escapeHtml(details)}</div>
+      <div class="field-popup-actions">
+        ${owner ? `<button class="small" type="button" onclick="copyFieldOwner('${field.id}')">Copy</button>` : ""}
+        ${owner ? `<button class="small" type="button" onclick="editFieldOwner('${field.ownerId}')">Edit</button>` : `<button class="small primary" type="button" onclick="assignFieldOwner('${field.id}')">Add contact</button>`}
+        ${owner?.phone ? `<button class="small" type="button" onclick="callFieldOwner('${field.ownerId}')">Call</button>` : ""}
+        <button class="small danger" type="button" onclick="removeFieldBoundary('${field.id}')">Remove field</button>
+      </div>
+    </div>
+  `;
+}
+
+function assignFieldOwner(fieldId){
+  const field = fieldById(fieldId);
+  if(!field) return;
+  const owner = findOrCreateFieldOwner();
+  if(!owner) return;
+  field.ownerId = owner.id;
+  selectedFieldOwnerId = owner.id;
+  persistFieldBook();
+  renderFieldBookLayer();
+  setSurveyMapStatus(`${owner.name} linked to this field.`);
+}
+
+async function importBoundaryLayerFile(event){
+  const file = event?.target?.files?.[0];
+  if(!file){
+    setSurveyMapStatus("Choose a GeoJSON boundary file first.");
+    return;
+  }
+
+  try{
+    const text = await file.text();
+    const geojson = JSON.parse(text);
+    const imported = importBoundaryGeoJson(geojson);
+    if(!imported){
+      setSurveyMapStatus("No polygon boundaries found in that GeoJSON file.");
+      return;
+    }
+    persistFieldBook();
+    renderFieldBookLayer();
+    fitFieldBookLayer();
+    setSurveyMapStatus(`${imported} boundary shape${imported === 1 ? "" : "s"} imported. Tap a boundary to add a landowner.`);
+  }catch(error){
+    setSurveyMapStatus(error.message || "Could not import that boundary file.");
+  }finally{
+    if(boundaryFileInput) boundaryFileInput.value = "";
+  }
+}
+
+function importBoundaryGeoJson(geojson){
+  const features = normaliseGeoJsonFeatures(geojson);
+  let imported = 0;
+  for(const feature of features){
+    const geometry = feature?.geometry || feature;
+    if(!geometry) continue;
+    const polygons = geometry.type === "Polygon"
+      ? [geometry.coordinates]
+      : geometry.type === "MultiPolygon"
+        ? geometry.coordinates
+        : [];
+
+    for(const polygon of polygons){
+      const ring = Array.isArray(polygon?.[0]) ? polygon[0] : [];
+      const boundary = ring
+        .map((coord) => Array.isArray(coord) ? { lat:Number(coord[1]), lng:Number(coord[0]) } : null)
+        .filter((point) => Number.isFinite(point?.lat) && Number.isFinite(point?.lng));
+      const cleaned = stripClosingBoundaryPoint(boundary).map(compactLatLng);
+      if(cleaned.length < 3) continue;
+      fieldBookFields.push({
+        id:createId("field"),
+        ownerId:"",
+        boundary:cleaned,
+        source:"imported-boundary",
+        createdAt:new Date().toISOString()
+      });
+      imported += 1;
+    }
+  }
+  return imported;
+}
+
+function normaliseGeoJsonFeatures(geojson){
+  if(!geojson) return [];
+  if(geojson.type === "FeatureCollection" && Array.isArray(geojson.features)) return geojson.features;
+  if(geojson.type === "Feature") return [geojson];
+  if(["Polygon","MultiPolygon"].includes(geojson.type)) return [geojson];
+  return [];
+}
+
+function stripClosingBoundaryPoint(points){
+  if(points.length < 2) return points;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if(Math.abs(first.lat - last.lat) < 0.0000001 && Math.abs(first.lng - last.lng) < 0.0000001){
+    return points.slice(0, -1);
+  }
+  return points;
+}
+
+function fitFieldBookLayer(){
+  if(!surveyMap || !fieldBookFields.length) return;
+  const points = fieldBookFields
+    .flatMap((field) => field.boundary || [])
+    .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+    .map((point) => [point.lat, point.lng]);
+  if(!points.length) return;
+  const bounds = L.latLngBounds(points);
+  if(bounds.isValid()) surveyMap.fitBounds(bounds.pad(0.12), { maxZoom:18 });
+}
+
+function exportBoundaryLayer(){
+  const fields = fieldBookFields.filter((field) => Array.isArray(field.boundary) && field.boundary.length >= 3);
+  if(!fields.length){
+    setSurveyMapStatus("No boundaries to export yet.");
+    return;
+  }
+
+  const geojson = {
+    type:"FeatureCollection",
+    name:"Tree Survey Boundary Layer",
+    features:fields.map((field, index) => ({
+      type:"Feature",
+      properties:{
+        fieldId:field.id,
+        label:`Field ${index + 1}`,
+        note:"Approximate working boundary. Landowner/contact details are not included."
+      },
+      geometry:{
+        type:"Polygon",
+        coordinates:[closedBoundaryCoordinates(field.boundary)]
+      }
+    }))
+  };
+
+  downloadTextFile(`tree-survey-boundaries-${new Date().toISOString().slice(0, 10)}.geojson`, JSON.stringify(geojson, null, 2), "application/geo+json");
+  setSurveyMapStatus(`${fields.length} boundary shape${fields.length === 1 ? "" : "s"} exported without landowner contact details.`);
+}
+
+function closedBoundaryCoordinates(boundary){
+  const coords = boundary.map((point) => [Number(point.lng), Number(point.lat)]);
+  if(coords.length){
+    const first = coords[0];
+    const last = coords[coords.length - 1];
+    if(first[0] !== last[0] || first[1] !== last[1]){
+      coords.push([...first]);
+    }
+  }
+  return coords;
+}
+
+function downloadTextFile(filename, text, mimeType="text/plain"){
+  const blob = new Blob([text], { type:mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyFieldOwner(fieldId){
+  const field = fieldById(fieldId);
+  const owner = field ? fieldOwnerById(field.ownerId) : null;
+  if(!owner){
+    setSurveyMapStatus("No landowner contact found for that field.");
+    return;
+  }
+  const text = [
+    owner.name,
+    owner.phone,
+    owner.address,
+    owner.postcode,
+    owner.notes
+  ].filter(Boolean).join("\n");
+  try{
+    await navigator.clipboard.writeText(text);
+    setSurveyMapStatus(`${owner.name} copied.`);
+  }catch{
+    setSurveyMapStatus("Could not copy the landowner details.");
+  }
+}
+
+function callFieldOwner(ownerId){
+  const owner = fieldOwnerById(ownerId);
+  if(!owner?.phone){
+    setSurveyMapStatus("No phone number saved for that landowner.");
+    return;
+  }
+  window.location.href = `tel:${owner.phone.replace(/[^0-9+]/g, "")}`;
+}
+
+function editFieldOwner(ownerId){
+  const owner = fieldOwnerById(ownerId);
+  if(!owner) return;
+  const nextName = (window.prompt("Landowner name", owner.name) || "").trim();
+  if(!nextName) return;
+  owner.name = nextName;
+  owner.phone = (window.prompt("Phone number", owner.phone || "") || "").trim();
+  owner.address = (window.prompt("Address", owner.address || "") || "").trim();
+  owner.postcode = (window.prompt("Postcode", owner.postcode || "") || "").trim();
+  owner.notes = (window.prompt("Notes / access details", owner.notes || "") || "").trim();
+  persistFieldBook();
+  renderFieldBookLayer();
+  setSurveyMapStatus(`${owner.name} updated.`);
+}
+
+function removeFieldBoundary(fieldId){
+  const field = fieldById(fieldId);
+  const owner = field ? fieldOwnerById(field.ownerId) : null;
+  const ok = window.confirm(`Remove this field note${owner ? ` for ${owner.name}` : ""}?`);
+  if(!ok) return;
+  fieldBookFields = fieldBookFields.filter((item) => item.id !== fieldId);
+  persistFieldBook();
+  renderFieldBookLayer();
+  setSurveyMapStatus("Field note removed. The landowner contact is still saved for other fields.");
 }
 
 function loadStoredSpanData(){
@@ -4042,6 +4614,8 @@ function renderSpanCard(span, title="Nearest span from your data"){
   const detail = Number.isFinite(span.distanceM) && span.distanceM > 0
     ? `${span.distanceM} m away`
     : "Filled from your span data";
+  const position = getSpanMapPosition(span);
+  const mapsUrl = position ? googleMapsUrl(position.lat, position.lon, poleDisplayName(span)) : "";
 
   return `
     <article class="card" id="span">
@@ -4053,9 +4627,37 @@ function renderSpanCard(span, title="Nearest span from your data"){
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
-      ${actions([copyButton("Copy span info", spanCopyText(span))])}
+      ${actions([
+        copyButton("Copy span info", spanCopyText(span)),
+        mapsUrl ? linkButton("Show in Google Maps", mapsUrl, true) : "",
+        buttonHtml("Open MightyFields", "openMightyFieldsForCurrentSpan()")
+      ].filter(Boolean))}
     </article>
   `;
+}
+
+function googleMapsUrl(lat, lon, label=""){
+  const query = encodeURIComponent(`${lat},${lon}${label ? ` (${label})` : ""}`);
+  return `https://www.google.com/maps/search/?api=1&query=${query}`;
+}
+
+function openMightyFieldsForCurrentSpan(){
+  const span = currentReport?.nearestSpan;
+  const configuredUrl = localStorage.getItem("treeSurveyMightyFieldsUrl") || "";
+  if(configuredUrl){
+    window.open(applyMightyFieldsUrlTemplate(configuredUrl, span), "_blank", "noopener");
+    return;
+  }
+  setElementStatus(statusEl, "Need MightyFields link format first", "error");
+  window.alert("I can wire this in once we know the MightyFields link format. If MightyFields has a web/app link for a form or job, send me an example and I can make this button open the selected span.");
+}
+
+function applyMightyFieldsUrlTemplate(url, span){
+  if(!span) return url;
+  return url
+    .replaceAll("{span}", encodeURIComponent(span.span || ""))
+    .replaceAll("{toPole}", encodeURIComponent(span.toPole || ""))
+    .replaceAll("{gridRef}", encodeURIComponent(currentReport?.gridRef || ""));
 }
 
 function renderMightyFieldsCards(span, siteGridRef){
