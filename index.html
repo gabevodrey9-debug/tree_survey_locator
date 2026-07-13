@@ -1477,6 +1477,7 @@ function installSurveyTouchHandlers(mapEl){
       editPointers.set(event.pointerId, pointerEventPoint(event));
       editGesture = {
         last:gestureInfo([...editPointers.values()]),
+        lastLatLng:latLngFromClientPoint(gestureInfo([...editPointers.values()]).center),
         totalMove:0,
         moved:false,
         startedOnDrawing:true,
@@ -1502,6 +1503,7 @@ function installSurveyTouchHandlers(mapEl){
       mapEl.setPointerCapture?.(event.pointerId);
       editPointers.set(event.pointerId, pointerEventPoint(event));
       editGesture.last = gestureInfo([...editPointers.values()]);
+      editGesture.lastLatLng = editGesture.last ? latLngFromClientPoint(editGesture.last.center) : null;
       disableSurveyMapMovement();
       return;
     }
@@ -1558,7 +1560,15 @@ function installSurveyTouchHandlers(mapEl){
         editGesture.moved = true;
       }
       if(Math.hypot(dx, dy) > 1 && editGesture.moved){
-        moveSelectedDrawingByPixels(dx, dy);
+        const currentLatLng = latLngFromClientPoint(current.center);
+        if(editGesture.lastLatLng && currentLatLng){
+          moveSelectedDrawingByLatLngDelta(
+            currentLatLng.lat - editGesture.lastLatLng.lat,
+            currentLatLng.lng - editGesture.lastLatLng.lng
+          );
+        }else{
+          moveSelectedDrawingByPixels(dx, dy);
+        }
       }
 
       if(current.count >= 2 && editGesture.last.count >= 2){
@@ -1575,6 +1585,7 @@ function installSurveyTouchHandlers(mapEl){
       }
 
       editGesture.last = current;
+      editGesture.lastLatLng = latLngFromClientPoint(current.center);
       return;
     }
 
@@ -1638,6 +1649,7 @@ function installSurveyTouchHandlers(mapEl){
           syncMapMovementState();
         }else{
           editGesture.last = gestureInfo([...editPointers.values()]);
+          editGesture.lastLatLng = editGesture.last ? latLngFromClientPoint(editGesture.last.center) : null;
         }
         return;
       }
@@ -2295,7 +2307,7 @@ function drawSurveyDrawingCanvas(){
     if(item.type === "circle" && item.shape.getLatLng && item.shape.getRadius){
       const center = surveyMap.latLngToContainerPoint(item.shape.getLatLng());
       const edge = surveyMap.latLngToContainerPoint(offsetLatLngEast(item.shape.getLatLng(), item.shape.getRadius()));
-      const radiusPx = Math.max(1, center.distanceTo(edge));
+      const radiusPx = item.radiusUnits === "px" ? item.shape.getRadius() : Math.max(1, center.distanceTo(edge));
       ctx.beginPath();
       ctx.arc(center.x, center.y, radiusPx, 0, Math.PI * 2);
       ctx.fillStyle = fill;
@@ -2861,13 +2873,28 @@ function isLeafletControlTarget(target){
 }
 
 function latLngFromPointerEvent(event){
-  const rect = surveyMap.getContainer().getBoundingClientRect();
-  return surveyMap.containerPointToLatLng(L.point(event.clientX - rect.left, event.clientY - rect.top));
+  if(surveyMap?.mouseEventToLatLng){
+    return surveyMap.mouseEventToLatLng(event);
+  }
+  const point = containerPointFromPointerEvent(event);
+  return surveyMap.containerPointToLatLng(point);
 }
 
 function containerPointFromPointerEvent(event){
+  if(surveyMap?.mouseEventToContainerPoint){
+    return surveyMap.mouseEventToContainerPoint(event);
+  }
   const rect = surveyMap.getContainer().getBoundingClientRect();
   return L.point(event.clientX - rect.left, event.clientY - rect.top);
+}
+
+function latLngFromClientPoint(point){
+  if(!surveyMap || !point) return null;
+  if(surveyMap.mouseEventToLatLng){
+    return surveyMap.mouseEventToLatLng({ clientX:point.x, clientY:point.y });
+  }
+  const rect = surveyMap.getContainer().getBoundingClientRect();
+  return surveyMap.containerPointToLatLng(L.point(point.x - rect.left, point.y - rect.top));
 }
 
 function applySurveyMapTool(latlng){
@@ -2921,17 +2948,16 @@ function drawingShapeStyle(selected=false){
 
 function addSurveyCircleShape(kind, points){
   const center = averageLatLng(points);
-  const radius = Math.max(4, Math.min(70, maxPointDistanceM(center, points) || 7));
+  const radius = Math.max(24, Math.min(96, maxPointDistancePx(center, points) || 29));
   const text = nextDrawingLabel(kind);
-  const shape = L.circle(center, {
+  const shape = L.circleMarker(center, {
     radius,
     ...drawingShapeStyle(false),
     fill:true,
-    fillColor:"rgba(95,189,101,.01)",
-    className:"survey-drawing-shape",
-    pane:"drawingHitPane"
+    fillColor:"#5fbd65",
+    className:"survey-drawing-shape"
   });
-  addNumberedDrawing(shape, center, text, "circle", { radius });
+  addNumberedDrawing(shape, center, text, "circle", { radius, radiusUnits:"px" });
 }
 
 function addSurveyRectangleShape(kind, points){
@@ -2941,8 +2967,7 @@ function addSurveyRectangleShape(kind, points){
     ...drawingShapeStyle(false),
     fill:true,
     fillColor:"rgba(95,189,101,.01)",
-    className:"survey-drawing-shape",
-    pane:"drawingHitPane"
+    className:"survey-drawing-shape"
   });
   addNumberedDrawing(shape, rect.center, text, "rectangle");
 }
@@ -2979,7 +3004,6 @@ function createDrawingItem(shape, labelPosition, text, type="shape", meta={}){
   const label = L.marker(labelPosition, {
     draggable:false,
     icon:drawingLabelIcon(text),
-    pane:"drawingLabelPane",
     zIndexOffset:2000
   });
   const group = L.layerGroup([shape, label]).addTo(surveyDrawingLayer);
@@ -3018,6 +3042,15 @@ function averageLatLng(points){
 
 function maxPointDistanceM(center, points){
   return points.reduce((max, point) => Math.max(max, haversineKm(center.lat, center.lng, point.lat, point.lng) * 1000), 0);
+}
+
+function maxPointDistancePx(center, points){
+  if(!surveyMap || !points.length) return 0;
+  const centerPoint = surveyMap.latLngToContainerPoint(center);
+  return points.reduce((max, point) => {
+    const nextPoint = surveyMap.latLngToContainerPoint(point);
+    return Math.max(max, centerPoint.distanceTo(nextPoint));
+  }, 0);
 }
 
 function closestStrokeShape(points){
@@ -3497,7 +3530,7 @@ function findDrawingAtPointer(event){
 
     if(item.type === "circle" && item.shape?.getRadius){
       const edge = surveyMap.latLngToContainerPoint(offsetLatLngEast(center, item.shape.getRadius()));
-      const radiusPx = Math.max(18, centerPoint.distanceTo(edge));
+      const radiusPx = item.radiusUnits === "px" ? Math.max(18, item.shape.getRadius()) : Math.max(18, centerPoint.distanceTo(edge));
       if(point.distanceTo(centerPoint) <= radiusPx + 18) return item;
     }else if(item.shape?.getLatLngs){
       const corners = getPolygonCorners(item).map((latlng) => surveyMap.latLngToContainerPoint(latlng));
@@ -3542,6 +3575,12 @@ function moveSelectedDrawingByPixels(dx, dy){
   const point = surveyMap.latLngToContainerPoint(center);
   const nextCenter = surveyMap.containerPointToLatLng(L.point(point.x + dx, point.y + dy));
   moveDrawingTo(selectedDrawing, nextCenter);
+}
+
+function moveSelectedDrawingByLatLngDelta(dLat, dLng){
+  if(!selectedDrawing || !Number.isFinite(dLat) || !Number.isFinite(dLng)) return;
+  const center = selectedDrawing.label.getLatLng();
+  moveDrawingTo(selectedDrawing, L.latLng(center.lat + dLat, center.lng + dLng));
 }
 
 function resizeSelectedDrawing(factor){
@@ -3701,7 +3740,8 @@ function saveMapDrawings(){
             type:"circle",
             text:item.text,
             center:compactLatLng(center),
-            radius:Math.round(item.shape.getRadius() * 100) / 100
+            radius:Math.round(item.shape.getRadius() * 100) / 100,
+            radiusUnits:item.radiusUnits || "px"
           });
         }else if(item.shape.getLatLngs){
           records.push({
@@ -3748,15 +3788,18 @@ function restoreMapDrawings(){
     for(const record of records){
       if(record.kind === "drawing" && record.type === "circle" && record.center){
         const center = L.latLng(record.center.lat, record.center.lng);
-        const shape = L.circle(center, {
-          radius:Number(record.radius) || 7,
+        const savedRadius = Number(record.radius);
+        const radius = record.radiusUnits === "px" && Number.isFinite(savedRadius)
+          ? Math.max(18, Math.min(120, savedRadius))
+          : 29;
+        const shape = L.circleMarker(center, {
+          radius,
           ...drawingShapeStyle(false),
           fill:true,
           fillColor:"#5fbd65",
-          className:"survey-drawing-shape",
-          pane:"drawingHitPane"
+          className:"survey-drawing-shape"
         });
-        createDrawingItem(shape, center, record.text || "T1", "circle", { radius:Number(record.radius) || 7 });
+        createDrawingItem(shape, center, record.text || "T1", "circle", { radius, radiusUnits:"px" });
       }else if(record.kind === "drawing" && record.corners?.length){
         const corners = record.corners.map((point) => L.latLng(point.lat, point.lng));
         const center = record.center ? L.latLng(record.center.lat, record.center.lng) : L.latLngBounds(corners).getCenter();
@@ -3764,8 +3807,7 @@ function restoreMapDrawings(){
           ...drawingShapeStyle(false),
           fill:true,
           fillColor:"#5fbd65",
-          className:"survey-drawing-shape",
-          pane:"drawingHitPane"
+          className:"survey-drawing-shape"
         });
         createDrawingItem(shape, center, record.text || "G1", "rectangle");
       }else if(record.kind === "route" && record.points?.length){
