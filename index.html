@@ -233,6 +233,13 @@ body.screenshot-mode .map-search,
 body.screenshot-mode .leaflet-control{
   display:none !important;
 }
+body.screenshot-render-mode .survey-line-canvas,
+body.screenshot-render-mode .survey-drawing-canvas{
+  display:block;
+}
+body.screenshot-render-mode .leaflet-overlay-pane svg{
+  visibility:hidden;
+}
 body.map-mode .map-canvas-card{
   position:absolute;
   inset:0;
@@ -1426,27 +1433,39 @@ async function captureSurveyMapScreenshot(){
   const mapEl = document.getElementById("surveyMap");
   if(!mapEl) return;
 
+  let screenshotRenderActive = false;
   try{
     if(typeof html2canvas !== "function") throw new Error("Screenshot tool still loading");
     setSurveyMapStatus("Preparing a map-only screenshot...");
+    document.body.classList.add("screenshot-render-mode");
+    screenshotRenderActive = true;
+    drawSurveyLineCanvas();
+    drawSurveyDrawingCanvas();
     await new Promise((resolve) => setTimeout(resolve, 120));
     const canvas = await html2canvas(mapEl, {
       backgroundColor:null,
       scale:Math.min(2, window.devicePixelRatio || 1),
       useCORS:true,
       allowTaint:false,
+      imageTimeout:2500,
+      logging:false,
+      removeContainer:true,
       ignoreElements:(el) => Boolean(el.closest?.(".leaflet-control"))
     });
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     const file = blob ? new File([blob], `survey-map-${new Date().toISOString().slice(0, 10)}.png`, { type:"image/png" }) : null;
     if(file && navigator.canShare?.({ files:[file] }) && navigator.share){
-      await navigator.share({
-        files:[file],
-        title:"Survey map screenshot",
-        text:"Save this map image to Photos or Files."
-      });
-      setSurveyMapStatus("Share sheet opened. Choose Save Image to put it in Photos.");
-      return;
+      try{
+        await navigator.share({
+          files:[file],
+          title:"Survey map screenshot",
+          text:"Save this map image to Photos or Files."
+        });
+        setSurveyMapStatus("Share sheet opened. Choose Save Image to put it in Photos.");
+        return;
+      }catch(shareError){
+        console.warn("Map screenshot share failed; falling back to download", shareError);
+      }
     }
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
@@ -1455,8 +1474,15 @@ async function captureSurveyMapScreenshot(){
     link.click();
     link.remove();
     setSurveyMapStatus("Screenshot downloaded. On iPad, use Share or Files to save it to Photos.");
-  }catch{
+  }catch(error){
+    console.warn("Map screenshot capture failed", error);
     enterMapScreenshotMode();
+  }finally{
+    if(screenshotRenderActive){
+      document.body.classList.remove("screenshot-render-mode");
+      clearSurveyLineCanvas();
+      clearSurveyDrawingCanvas();
+    }
   }
 }
 
@@ -1480,6 +1506,17 @@ function installSurveyTouchHandlers(mapEl){
   let selectedDrawingLastTap = null;
 
   mapEl.addEventListener("pointerdown", (event) => {
+    if(mapLocked && mapTool === "delete" && !isLeafletControlTarget(event.target)){
+      const target = findDeletableMapItemAtPointer(event);
+      if(target){
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation?.();
+        removeDrawingItem(target);
+        return;
+      }
+    }
+
     const drawingTarget = mapLocked && mapTool === "pan"
       ? (findDrawingFromEventTarget(event.target) || findDrawingAtPointer(event))
       : null;
@@ -2255,6 +2292,52 @@ function clearSurveyLineCanvas(){
   surveyLineCanvasCtx.clearRect(0, 0, size.x, size.y);
 }
 
+function drawSurveyLineSnapshotCanvas(visual=surveyNetworkStyleForZoom()){
+  if(!surveyLineCanvasCtx || !surveyLineCanvas || !surveyMap) return;
+  if(getComputedStyle(surveyLineCanvas).display === "none") return;
+  resizeSurveyLineCanvas();
+  clearSurveyLineCanvas();
+  const ctx = surveyLineCanvasCtx;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  for(const line of surveyLineShapes){
+    if(!line.latlngs || line.latlngs.length < 2) continue;
+    if(line.isGap && !visual.showGapLines) continue;
+    const points = line.latlngs.map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for(const point of points.slice(1)){
+      ctx.lineTo(point.x, point.y);
+    }
+    ctx.strokeStyle = line.lineColor || "#2648d8";
+    ctx.globalAlpha = visual.lineOpacity;
+    ctx.lineWidth = visual.lineWeight;
+    if(line.isGap && visual.dashGap){
+      const dashParts = String(visual.dashGap).split(/\s+/).map(Number).filter(Number.isFinite);
+      ctx.setLineDash(dashParts.length ? dashParts : [4, 10]);
+    }else{
+      ctx.setLineDash([]);
+    }
+    ctx.stroke();
+  }
+
+  const bounds = surveyMap.getBounds().pad(0.18);
+  ctx.setLineDash([]);
+  for(const point of surveyPolePoints){
+    if(!bounds.contains([point.lat, point.lon])) continue;
+    const pixel = surveyMap.latLngToContainerPoint([point.lat, point.lon]);
+    ctx.beginPath();
+    ctx.fillStyle = lineColorForPoints(point);
+    ctx.globalAlpha = visual.poleOpacity;
+    ctx.arc(pixel.x, pixel.y, visual.poleRadius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
 function surveyNetworkStyleForZoom(){
   const zoom = surveyMap?.getZoom?.() || 13;
   if(zoom < 13.5){
@@ -2279,6 +2362,7 @@ function drawSurveyLineCanvas(){
   clearSurveyLineCanvas();
 
   const visual = surveyNetworkStyleForZoom();
+  drawSurveyLineSnapshotCanvas(visual);
   const renderer = surveyNetworkRenderer || undefined;
   for(const line of surveyLineShapes){
     if(!line.latlngs || line.latlngs.length < 2) continue;
@@ -2358,7 +2442,25 @@ function drawSurveyDrawingCanvas(){
   ctx.lineJoin = "round";
 
   for(const item of mapDrawingStack){
+    if(item?.itemType === "route" && item.getLatLngs){
+      const points = item.getLatLngs().map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+      if(points.length < 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(points[0].x, points[0].y);
+      for(const point of points.slice(1)){
+        ctx.lineTo(point.x, point.y);
+      }
+      ctx.strokeStyle = "#f4c430";
+      ctx.globalAlpha = 0.95;
+      ctx.lineWidth = 5;
+      ctx.setLineDash([]);
+      ctx.stroke();
+      continue;
+    }
+
     if(!item?.group || !item.shape) continue;
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
     const selected = item === selectedDrawing;
     const stroke = selected ? "#d99a18" : "#5fbd65";
     const fill = selected ? "rgba(217,154,24,.08)" : "rgba(95,189,101,.01)";
@@ -3565,7 +3667,7 @@ function removeDrawingItem(item){
 }
 
 function moveDrawingTo(drawing, newCenter){
-  const oldCenter = drawing.center || drawing.label.getLatLng();
+  const oldCenter = getDrawingCenter(drawing);
   const dLat = newCenter.lat - oldCenter.lat;
   const dLng = newCenter.lng - oldCenter.lng;
 
@@ -3621,6 +3723,40 @@ function findDrawingFromEventTarget(target){
     return (shapeNode && (target === shapeNode || shapeNode.contains?.(target))) ||
       (labelNode && (target === labelNode || labelNode.contains?.(target)));
   }) || null;
+}
+
+function findDeletableMapItemAtPointer(event){
+  const directDrawing = findDrawingFromEventTarget(event.target);
+  if(directDrawing) return directDrawing;
+
+  const directItem = mapDrawingStack.find((item) => {
+    if(item?.group) return false;
+    const node = item?._path || item?._icon;
+    return node && (event.target === node || node.contains?.(event.target));
+  });
+  if(directItem) return directItem;
+
+  return findDrawingAtPointer(event) || findLooseMapItemAtPointer(event);
+}
+
+function findLooseMapItemAtPointer(event){
+  if(!surveyMap) return null;
+  const point = containerPointFromPointerEvent(event);
+  const items = [...mapDrawingStack].reverse();
+  for(const item of items){
+    if(item?.group) continue;
+    if(item?.itemType === "label" && item.getLatLng){
+      const itemPoint = surveyMap.latLngToContainerPoint(item.getLatLng());
+      if(point.distanceTo(itemPoint) <= 48) return item;
+    }
+    if(item?.itemType === "route" && item.getLatLngs){
+      const routePoints = item.getLatLngs().map((latlng) => surveyMap.latLngToContainerPoint(latlng));
+      for(let i = 0; i < routePoints.length - 1; i++){
+        if(pointToSegmentDistance(point, routePoints[i], routePoints[i + 1]) <= 18) return item;
+      }
+    }
+  }
+  return null;
 }
 
 function findDrawingAtPointer(event){
@@ -3754,7 +3890,7 @@ function transformSelectedPolygon(transformer){
 
 function transformDrawingPolygon(drawing, transformer){
   if(!drawing || !surveyMap || !drawing.shape.getLatLngs) return;
-  const center = drawing.label.getLatLng();
+  const center = getDrawingCenter(drawing);
   const centerPoint = surveyMap.latLngToContainerPoint(center);
   const nextCorners = getPolygonCorners(drawing).map((latlng) => {
     const point = surveyMap.latLngToContainerPoint(latlng);
@@ -3764,6 +3900,17 @@ function transformDrawingPolygon(drawing, transformer){
   drawing.shape.setLatLngs(nextCorners);
   drawing.center = center;
   drawSurveyDrawingCanvas();
+}
+
+function getDrawingCenter(drawing){
+  if(!drawing) return L.latLng(0, 0);
+  if(drawing.shape?.getLatLngs){
+    const corners = getPolygonCorners(drawing);
+    if(corners.length){
+      return L.latLngBounds(corners).getCenter();
+    }
+  }
+  return drawing.center || drawing.label?.getLatLng?.() || drawing.shape?.getLatLng?.() || L.latLng(0, 0);
 }
 
 function getPolygonCorners(drawing){
