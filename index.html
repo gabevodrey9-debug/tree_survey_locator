@@ -147,7 +147,7 @@ main{
   backdrop-filter:blur(8px);
 }
 body.map-mode .view-switch-fab{
-  top:10px;
+  top:14px;
   right:10px;
 }
 .tabs{
@@ -214,15 +214,16 @@ body.map-mode .map-search{
   backdrop-filter:blur(7px);
 }
 body.map-mode .map-top-right{
-  top:58px;
-  right:10px;
-  width:min(160px,36vw);
+  top:10px;
+  left:10px;
+  width:min(176px,34vw);
 }
 body.map-mode .map-search{
   top:10px;
-  left:50%;
-  width:min(420px,48vw);
-  transform:translateX(-50%);
+  left:196px;
+  right:104px;
+  width:auto;
+  transform:none;
 }
 body.map-mode .map-title{
   display:none;
@@ -652,8 +653,7 @@ body.map-mode #surveyMap{
   grid-template-columns:1fr;
 }
 .map-rotation-actions{
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:6px;
+  display:block;
   margin-top:6px;
 }
 .map-toolbar .small,
@@ -703,6 +703,74 @@ body.map-mode #surveyMap{
   min-height:44px;
   padding:9px 4px;
   font-size:12px;
+}
+.map-compass{
+  position:relative;
+  width:100%;
+  min-height:48px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:linear-gradient(180deg,#fff,#edf2ec);
+  color:var(--ink);
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.map-search-form .small{
+  min-width:70px;
+}
+.map-compass:disabled{
+  opacity:.58;
+  cursor:not-allowed;
+}
+.compass-window{
+  position:absolute;
+  inset:7px 8px;
+  overflow:hidden;
+  mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
+}
+.compass-track{
+  --compass-offset:0px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  height:100%;
+  white-space:nowrap;
+  transform:translateX(var(--compass-offset));
+  transition:transform .16s ease;
+  font:800 12px Inter,Arial,sans-serif;
+  color:#456251;
+}
+.compass-point{
+  min-width:24px;
+  text-align:center;
+}
+.compass-point.main{
+  color:var(--forest-2);
+  font-size:14px;
+}
+.compass-pointer{
+  position:absolute;
+  top:4px;
+  left:50%;
+  width:2px;
+  height:40px;
+  border-radius:999px;
+  background:var(--amber);
+  transform:translateX(-50%);
+  box-shadow:0 0 0 2px rgba(212,145,10,.16);
+}
+.compass-reset-label{
+  position:absolute;
+  right:7px;
+  bottom:5px;
+  padding:2px 5px;
+  border-radius:999px;
+  background:rgba(255,255,255,.75);
+  color:#567061;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.04em;
 }
 .map-toolbar .small.active{
   border-color:var(--leaf);
@@ -871,17 +939,19 @@ a.primary,button.primary{
     bottom:8px;
   }
   body.map-mode .map-search{
-    top:64px;
+    top:138px;
     left:8px;
     right:8px;
     width:auto;
     transform:none;
   }
   body.map-mode .map-top-right{
-    top:58px;
+    top:8px;
+    left:8px;
+    width:124px;
   }
-  .map-search-form{grid-template-columns:1fr 1fr}
-  .map-search-form input{grid-column:1 / -1}
+  .map-search-form{grid-template-columns:minmax(0,1fr) auto auto auto}
+  .map-search-form input{grid-column:auto}
   .map-toolbar{grid-template-columns:repeat(4,minmax(0,1fr))}
   .map-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
   .frame-actions{grid-template-columns:1fr}
@@ -958,9 +1028,31 @@ a.primary,button.primary{
         <button class="small" id="baseMapToggleBtn" type="button" onclick="toggleSurveyBaseMap()">Satellite</button>
       </div>
       <div class="map-rotation-actions">
-        <button class="small" id="mapRotateLeftBtn" type="button" onclick="rotateSurveyMap(-15)">Left</button>
-        <button class="small" id="mapNorthBtn" type="button" onclick="resetSurveyMapRotation()">North</button>
-        <button class="small" id="mapRotateRightBtn" type="button" onclick="rotateSurveyMap(15)">Right</button>
+        <button class="map-compass" id="mapCompassBtn" type="button" onclick="resetSurveyMapRotation()" aria-label="Reset map to north" title="Tap to face north">
+          <span class="compass-window" aria-hidden="true">
+            <span class="compass-track" id="mapCompassTrack">
+              <span class="compass-point main">N</span>
+              <span class="compass-point">NE</span>
+              <span class="compass-point main">E</span>
+              <span class="compass-point">SE</span>
+              <span class="compass-point main">S</span>
+              <span class="compass-point">SW</span>
+              <span class="compass-point main">W</span>
+              <span class="compass-point">NW</span>
+              <span class="compass-point main">N</span>
+              <span class="compass-point">NE</span>
+              <span class="compass-point main">E</span>
+              <span class="compass-point">SE</span>
+              <span class="compass-point main">S</span>
+              <span class="compass-point">SW</span>
+              <span class="compass-point main">W</span>
+              <span class="compass-point">NW</span>
+              <span class="compass-point main">N</span>
+            </span>
+          </span>
+          <span class="compass-pointer" aria-hidden="true"></span>
+          <span class="compass-reset-label" id="mapCompassBearing">N</span>
+        </button>
       </div>
     </section>
 
@@ -1316,6 +1408,7 @@ function initSurveyMap(attempts=0){
   unlockSurveyFrame(false);
   renderSurveyMap(true);
   activeMapDrawingKey = currentReport?.nearestSpan ? mapDrawingKeyForSpan(currentReport.nearestSpan) : "";
+  updateSurveyMapRotationButton();
 }
 
 function setSurveyMapStatus(message){
@@ -1390,13 +1483,16 @@ function setSurveyMapBearing(bearing){
 
 function updateSurveyMapRotationButton(){
   const bearing = Math.round(getSurveyMapBearing());
-  const northButton = document.getElementById("mapNorthBtn");
-  if(northButton) northButton.textContent = bearing ? `${bearing} deg` : "North";
-  for(const id of ["mapRotateLeftBtn","mapNorthBtn","mapRotateRightBtn"]){
-    const button = document.getElementById(id);
-    if(!button) continue;
-    button.disabled = mapLocked;
-    button.title = mapLocked ? "Unlock the map to rotate it" : "";
+  const compass = document.getElementById("mapCompassBtn");
+  const track = document.getElementById("mapCompassTrack");
+  const label = document.getElementById("mapCompassBearing");
+  const offset = 60 - (bearing * 0.89);
+  if(track) track.style.setProperty("--compass-offset", `${offset}px`);
+  if(label) label.textContent = bearing ? `${bearing}deg` : "N";
+  if(compass){
+    compass.disabled = mapLocked;
+    compass.title = mapLocked ? "Unlock the map to rotate it" : "Tap to face north";
+    compass.setAttribute("aria-label", bearing ? `Reset map rotation from ${bearing} degrees to north` : "Map is facing north");
   }
 }
 
