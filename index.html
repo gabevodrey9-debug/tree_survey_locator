@@ -733,7 +733,7 @@ body.map-mode #surveyMap{
   --compass-offset:0px;
   display:flex;
   align-items:center;
-  gap:16px;
+  gap:0;
   height:100%;
   white-space:nowrap;
   transform:translateX(var(--compass-offset));
@@ -742,7 +742,7 @@ body.map-mode #surveyMap{
   color:#456251;
 }
 .compass-point{
-  min-width:24px;
+  flex:0 0 34px;
   text-align:center;
 }
 .compass-point.main{
@@ -1048,6 +1048,14 @@ a.primary,button.primary{
               <span class="compass-point main">W</span>
               <span class="compass-point">NW</span>
               <span class="compass-point main">N</span>
+              <span class="compass-point">NE</span>
+              <span class="compass-point main">E</span>
+              <span class="compass-point">SE</span>
+              <span class="compass-point main">S</span>
+              <span class="compass-point">SW</span>
+              <span class="compass-point main">W</span>
+              <span class="compass-point">NW</span>
+              <span class="compass-point main">N</span>
             </span>
           </span>
           <span class="compass-pointer" aria-hidden="true"></span>
@@ -1162,6 +1170,7 @@ let manualMapLinks = [];
 let blockedAutoMapLinks = [];
 let pendingLinkPoleId = null;
 let rotateRedrawTimer = null;
+let compassVisualBearing = 0;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
 let mapUndoStack = [];
@@ -1482,11 +1491,20 @@ function setSurveyMapBearing(bearing){
 }
 
 function updateSurveyMapRotationButton(){
-  const bearing = Math.round(getSurveyMapBearing());
+  const rawBearing = getSurveyMapBearing();
+  const bearing = Math.round(((rawBearing % 360) + 360) % 360);
   const compass = document.getElementById("mapCompassBtn");
   const track = document.getElementById("mapCompassTrack");
   const label = document.getElementById("mapCompassBearing");
-  const offset = 60 - (bearing * 0.89);
+  ensureCompassTape(track);
+  const diff = ((((bearing - compassVisualBearing) % 360) + 540) % 360) - 180;
+  compassVisualBearing += diff;
+  if(compassVisualBearing > 540) compassVisualBearing -= 360;
+  if(compassVisualBearing < -180) compassVisualBearing += 360;
+  const pointWidth = 34;
+  const centerOffset = 54;
+  const middleCycleOffset = pointWidth * 24;
+  const offset = centerOffset - middleCycleOffset - (compassVisualBearing / 45) * pointWidth;
   if(track) track.style.setProperty("--compass-offset", `${offset}px`);
   if(label) label.textContent = bearing ? `${bearing}deg` : "N";
   if(compass){
@@ -1494,6 +1512,21 @@ function updateSurveyMapRotationButton(){
     compass.title = mapLocked ? "Unlock the map to rotate it" : "Tap to face north";
     compass.setAttribute("aria-label", bearing ? `Reset map rotation from ${bearing} degrees to north` : "Map is facing north");
   }
+}
+
+function ensureCompassTape(track){
+  if(!track || track.dataset.ready === "true") return;
+  const points = ["N","NE","E","SE","S","SW","W","NW"];
+  const html = [];
+  for(let cycle = 0; cycle < 7; cycle++){
+    for(const point of points){
+      const main = ["N","E","S","W"].includes(point) ? " main" : "";
+      html.push(`<span class="compass-point${main}">${point}</span>`);
+    }
+  }
+  html.push(`<span class="compass-point main">N</span>`);
+  track.innerHTML = html.join("");
+  track.dataset.ready = "true";
 }
 
 function scheduleSurveyLineRedrawAfterRotate(){
