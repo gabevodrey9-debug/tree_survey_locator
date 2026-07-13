@@ -447,7 +447,7 @@ textarea.text-field{
   align-items:center;
 }
 .map-search-form{
-  grid-template-columns:minmax(0,1fr) auto auto;
+  grid-template-columns:minmax(0,1fr) auto auto auto;
 }
 .search-form .small{
   min-width:96px;
@@ -947,6 +947,7 @@ a.primary,button.primary{
         <input class="text-field" id="mapSpanSearchInput" type="search" placeholder="Search span or pole" autocomplete="off">
         <button class="small primary" type="submit">Find</button>
         <button class="small primary" id="mapLockToggleBtn" type="button" onclick="toggleSurveyLock()" aria-label="Lock this view and open drawing tools" title="Lock this view and open drawing tools">Draw</button>
+        <button class="small" type="button" onclick="undoMapDrawing()" aria-label="Undo last map action" title="Undo last map action" data-full-label="Undo" data-icon-key="undo">Undo</button>
       </form>
     </section>
 
@@ -1048,6 +1049,7 @@ let pendingLinkPoleId = null;
 let rotateRedrawTimer = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
+let mapUndoStack = [];
 let selectedDrawing = null;
 let drawCounters = { tree:0, group:0 };
 let activeRoute = null;
@@ -1841,6 +1843,7 @@ function poleDisplayDensity(zoom){
 }
 
 function renderSurveyPole(point, showLabel=false){
+  let dragStartPosition = null;
   const marker = L.marker([point.lat, point.lon], {
     draggable:true,
     title:point.label,
@@ -1892,19 +1895,40 @@ function renderSurveyPole(point, showLabel=false){
   });
 
   marker.on("dragstart", () => {
+    dragStartPosition = {
+      mapPoleId:point.span.mapPoleId,
+      label:point.label,
+      lat:point.lat,
+      lon:point.lon,
+      spanLat:point.span.latitude,
+      spanLon:point.span.longitude,
+      coordinateSource:point.span.coordinateSource
+    };
     setMapTool("pan");
   });
 
   marker.on("dragend", () => {
     const position = marker.getLatLng();
+    const moved = dragStartPosition
+      ? haversineKm(dragStartPosition.lat, dragStartPosition.lon, position.lat, position.lng) * 1000
+      : 0;
     point.lat = position.lat;
     point.lon = position.lng;
     point.span.latitude = position.lat;
     point.span.longitude = position.lng;
     point.span.coordinateSource = "manual-map";
+    if(dragStartPosition && moved > 0.15){
+      recordMapUndoAction({
+        type:"pole-move",
+        ...dragStartPosition,
+        nextLat:position.lat,
+        nextLon:position.lng
+      });
+    }
+    dragStartPosition = null;
     persistSpanData();
     redrawSurveyLinesOnly();
-    setSurveyMapStatus(`${point.label} moved. Lock the map again when the span is framed.`);
+    setSurveyMapStatus(`${point.label} moved. Press Undo to put it back.`);
   });
 }
 
@@ -3978,7 +4002,43 @@ function createTextLabel(latlng, text){
   return marker;
 }
 
+function recordMapUndoAction(action){
+  mapUndoStack.push({
+    ...action,
+    at:Date.now()
+  });
+  if(mapUndoStack.length > 30) mapUndoStack.shift();
+}
+
+function undoLastPoleMove(action){
+  const spans = Array.isArray(window.SPAN_DATA) ? window.SPAN_DATA : [];
+  const span = spans.find((item) => item.mapPoleId === action.mapPoleId);
+  if(!span){
+    setSurveyMapStatus("That pole is no longer in the map data, so it could not be restored.");
+    return true;
+  }
+
+  span.latitude = action.spanLat ?? action.lat;
+  span.longitude = action.spanLon ?? action.lon;
+  if(action.coordinateSource === undefined){
+    delete span.coordinateSource;
+  }else{
+    span.coordinateSource = action.coordinateSource;
+  }
+
+  persistSpanData();
+  renderSurveyMap(false);
+  setSurveyMapStatus(`${action.label || "Pole"} moved back.`);
+  return true;
+}
+
 function undoMapDrawing(){
+  const action = mapUndoStack.pop();
+  if(action?.type === "pole-move"){
+    undoLastPoleMove(action);
+    return;
+  }
+
   if(activeRoute && activeRoutePoints.length){
     activeRoutePoints.pop();
     activeRoute.setLatLngs(activeRoutePoints);
