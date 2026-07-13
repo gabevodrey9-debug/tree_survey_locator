@@ -515,6 +515,9 @@ body.map-mode #surveyMap{
   z-index:620;
   pointer-events:none;
 }
+#surveyMap.network-settling .leaflet-overlay-pane canvas{
+  opacity:0;
+}
 
 .text-prompt-backdrop{
   position:fixed;
@@ -1041,6 +1044,7 @@ let manualMapLinks = [];
 let blockedAutoMapLinks = [];
 let pendingLinkPoleId = null;
 let rotateRedrawTimer = null;
+let networkSettleTimer = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
 let selectedDrawing = null;
@@ -1245,6 +1249,9 @@ function initSurveyMap(attempts=0){
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   installSurveyLineCanvas(mapEl);
   installSurveyDrawingCanvas(mapEl);
+  surveyMap.on("zoomstart", () => {
+    hideSurveyNetworkDuringGesture();
+  });
   surveyMap.on("zoom move rotate resize", () => {
     scheduleSurveyDrawingCanvasRedraw();
   });
@@ -1252,6 +1259,7 @@ function initSurveyMap(attempts=0){
     drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
+    showSurveyNetworkAfterGesture();
   });
   surveyMap.on("moveend", () => {
     drawSurveyDrawingCanvas();
@@ -1259,10 +1267,12 @@ function initSurveyMap(attempts=0){
   });
   surveyMap.on("rotate", () => {
     updateSurveyMapRotationButton();
+    hideSurveyNetworkDuringGesture(220);
   });
   surveyMap.on("rotateend", () => {
     scheduleSurveyLineRedrawAfterRotate();
     drawSurveyDrawingCanvas();
+    showSurveyNetworkAfterGesture();
   });
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
@@ -2182,16 +2192,38 @@ function clearSurveyLineCanvas(){
   surveyLineCanvasCtx.clearRect(0, 0, size.x, size.y);
 }
 
+function hideSurveyNetworkDuringGesture(autoShowAfter=0){
+  const mapEl = document.getElementById("surveyMap");
+  if(!mapEl) return;
+  window.clearTimeout(networkSettleTimer);
+  mapEl.classList.add("network-settling");
+  if(autoShowAfter){
+    networkSettleTimer = window.setTimeout(() => {
+      drawSurveyLineCanvas();
+      mapEl.classList.remove("network-settling");
+    }, autoShowAfter);
+  }
+}
+
+function showSurveyNetworkAfterGesture(){
+  const mapEl = document.getElementById("surveyMap");
+  if(!mapEl) return;
+  window.clearTimeout(networkSettleTimer);
+  networkSettleTimer = window.setTimeout(() => {
+    mapEl.classList.remove("network-settling");
+  }, 90);
+}
+
 function surveyNetworkStyleForZoom(){
   const zoom = surveyMap?.getZoom?.() || 13;
   if(zoom < 13.5){
-    return { lineWeight:0.55, lineOpacity:0.42, poleRadius:1.25, poleOpacity:0.48, dashGap:"1 10", showGapLines:false };
+    return { lineWeight:1.05, lineOpacity:0.6, poleRadius:1.75, poleOpacity:0.64, dashGap:"1 10", showGapLines:false };
   }
   if(zoom < 15){
-    return { lineWeight:0.9, lineOpacity:0.56, poleRadius:1.7, poleOpacity:0.62, dashGap:"1 11", showGapLines:false };
+    return { lineWeight:1.35, lineOpacity:0.68, poleRadius:2.15, poleOpacity:0.72, dashGap:"1 11", showGapLines:false };
   }
   if(zoom < 16.5){
-    return { lineWeight:1.45, lineOpacity:0.74, poleRadius:2.45, poleOpacity:0.78, dashGap:"1 12", showGapLines:true };
+    return { lineWeight:1.7, lineOpacity:0.78, poleRadius:2.7, poleOpacity:0.82, dashGap:"1 12", showGapLines:true };
   }
   if(zoom < 18){
     return { lineWeight:2.2, lineOpacity:0.88, poleRadius:3.45, poleOpacity:0.9, dashGap:"1 13", showGapLines:true };
