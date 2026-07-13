@@ -514,11 +514,8 @@ body.map-mode #surveyMap{
   inset:0;
   z-index:620;
   pointer-events:none;
+  display:none;
 }
-#surveyMap.network-settling .leaflet-overlay-pane canvas{
-  opacity:0;
-}
-
 .text-prompt-backdrop{
   position:fixed;
   inset:0;
@@ -1044,7 +1041,6 @@ let manualMapLinks = [];
 let blockedAutoMapLinks = [];
 let pendingLinkPoleId = null;
 let rotateRedrawTimer = null;
-let networkSettleTimer = null;
 let activeStrokePreview = null;
 let mapDrawingStack = [];
 let selectedDrawing = null;
@@ -1206,9 +1202,9 @@ function initSurveyMap(attempts=0){
     scrollWheelZoom:true,
     doubleClickZoom:false,
     inertia:false,
-    zoomAnimation:true,
-    fadeAnimation:true,
-    markerZoomAnimation:true,
+    zoomAnimation:false,
+    fadeAnimation:false,
+    markerZoomAnimation:false,
     bounceAtZoomLimits:false,
     preferCanvas:false,
     zoomSnap:0.25,
@@ -1249,17 +1245,13 @@ function initSurveyMap(attempts=0){
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   installSurveyLineCanvas(mapEl);
   installSurveyDrawingCanvas(mapEl);
-  surveyMap.on("zoomstart", () => {
-    hideSurveyNetworkDuringGesture();
-  });
   surveyMap.on("zoom move rotate resize", () => {
-    scheduleSurveyDrawingCanvasRedraw();
+    refreshSurveyLineDisplay();
   });
   surveyMap.on("zoomend", () => {
     drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
-    showSurveyNetworkAfterGesture();
   });
   surveyMap.on("moveend", () => {
     drawSurveyDrawingCanvas();
@@ -1267,12 +1259,11 @@ function initSurveyMap(attempts=0){
   });
   surveyMap.on("rotate", () => {
     updateSurveyMapRotationButton();
-    hideSurveyNetworkDuringGesture(220);
+    refreshSurveyLineDisplay();
   });
   surveyMap.on("rotateend", () => {
     scheduleSurveyLineRedrawAfterRotate();
     drawSurveyDrawingCanvas();
-    showSurveyNetworkAfterGesture();
   });
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
@@ -2192,28 +2183,6 @@ function clearSurveyLineCanvas(){
   surveyLineCanvasCtx.clearRect(0, 0, size.x, size.y);
 }
 
-function hideSurveyNetworkDuringGesture(autoShowAfter=0){
-  const mapEl = document.getElementById("surveyMap");
-  if(!mapEl) return;
-  window.clearTimeout(networkSettleTimer);
-  mapEl.classList.add("network-settling");
-  if(autoShowAfter){
-    networkSettleTimer = window.setTimeout(() => {
-      drawSurveyLineCanvas();
-      mapEl.classList.remove("network-settling");
-    }, autoShowAfter);
-  }
-}
-
-function showSurveyNetworkAfterGesture(){
-  const mapEl = document.getElementById("surveyMap");
-  if(!mapEl) return;
-  window.clearTimeout(networkSettleTimer);
-  networkSettleTimer = window.setTimeout(() => {
-    mapEl.classList.remove("network-settling");
-  }, 90);
-}
-
 function surveyNetworkStyleForZoom(){
   const zoom = surveyMap?.getZoom?.() || 13;
   if(zoom < 13.5){
@@ -2306,8 +2275,9 @@ function clearSurveyDrawingCanvas(){
 
 function drawSurveyDrawingCanvas(){
   if(!surveyDrawingCanvasCtx || !surveyMap) return;
-  resizeSurveyDrawingCanvas();
   clearSurveyDrawingCanvas();
+  if(getComputedStyle(surveyDrawingCanvas).display === "none") return;
+  resizeSurveyDrawingCanvas();
   if(!mapDrawingStack.length) return;
 
   const ctx = surveyDrawingCanvasCtx;
@@ -2940,18 +2910,24 @@ function simplifyRoutePoints(points){
   return simplified;
 }
 
+function drawingShapeStyle(selected=false){
+  return {
+    color:selected ? "#d99a18" : "#5fbd65",
+    opacity:1,
+    weight:selected ? 7 : 5,
+    fillOpacity:selected ? 0.08 : 0.01
+  };
+}
+
 function addSurveyCircleShape(kind, points){
   const center = averageLatLng(points);
   const radius = Math.max(4, Math.min(70, maxPointDistanceM(center, points) || 7));
   const text = nextDrawingLabel(kind);
   const shape = L.circle(center, {
     radius,
-    color:"#5fbd65",
-    opacity:0,
-    weight:18,
+    ...drawingShapeStyle(false),
     fill:true,
-    fillColor:"#5fbd65",
-    fillOpacity:0,
+    fillColor:"rgba(95,189,101,.01)",
     className:"survey-drawing-shape",
     pane:"drawingHitPane"
   });
@@ -2962,12 +2938,9 @@ function addSurveyRectangleShape(kind, points){
   const rect = orientedStrokeRectangle(points);
   const text = nextDrawingLabel(kind);
   const shape = L.polygon(rect.corners, {
-    color:"#5fbd65",
-    opacity:0,
-    weight:18,
+    ...drawingShapeStyle(false),
     fill:true,
-    fillColor:"#5fbd65",
-    fillOpacity:0,
+    fillColor:"rgba(95,189,101,.01)",
     className:"survey-drawing-shape",
     pane:"drawingHitPane"
   });
@@ -3402,14 +3375,14 @@ function renameSelectedDrawing(){
 
 function selectDrawing(drawing){
   if(selectedDrawing?.shape?.setStyle){
-    selectedDrawing.shape.setStyle({ opacity:0, weight:18, fillOpacity:0 });
+    selectedDrawing.shape.setStyle(drawingShapeStyle(false));
     selectedDrawing.label?.setZIndexOffset?.(2000);
   }
 
   selectedDrawing = drawing || null;
 
   if(selectedDrawing?.shape?.setStyle){
-    selectedDrawing.shape.setStyle({ opacity:0, weight:18, fillOpacity:0 });
+    selectedDrawing.shape.setStyle(drawingShapeStyle(true));
     selectedDrawing.shape.bringToFront?.();
     selectedDrawing.label.setZIndexOffset?.(2500);
     setSurveyMapStatus(`${selectedDrawing.text} selected. Press Rename, or double tap the mark.`);
@@ -3777,12 +3750,9 @@ function restoreMapDrawings(){
         const center = L.latLng(record.center.lat, record.center.lng);
         const shape = L.circle(center, {
           radius:Number(record.radius) || 7,
-          color:"#5fbd65",
-          opacity:0,
-          weight:18,
+          ...drawingShapeStyle(false),
           fill:true,
           fillColor:"#5fbd65",
-          fillOpacity:0,
           className:"survey-drawing-shape",
           pane:"drawingHitPane"
         });
@@ -3791,12 +3761,9 @@ function restoreMapDrawings(){
         const corners = record.corners.map((point) => L.latLng(point.lat, point.lng));
         const center = record.center ? L.latLng(record.center.lat, record.center.lng) : L.latLngBounds(corners).getCenter();
         const shape = L.polygon(corners, {
-          color:"#5fbd65",
-          opacity:0,
-          weight:18,
+          ...drawingShapeStyle(false),
           fill:true,
           fillColor:"#5fbd65",
-          fillOpacity:0,
           className:"survey-drawing-shape",
           pane:"drawingHitPane"
         });
