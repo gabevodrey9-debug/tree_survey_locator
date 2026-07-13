@@ -1024,6 +1024,7 @@ let surveyLineCanvasCtx = null;
 let surveyLineShapes = [];
 let surveyLineCanvasSize = { width:0, height:0, ratio:0 };
 let surveyLineRedrawFrame = null;
+let surveyOverlayPositionFrame = null;
 let surveyDrawingCanvas = null;
 let surveyDrawingCanvasCtx = null;
 let surveyDrawingCanvasSize = { width:0, height:0, ratio:0 };
@@ -1202,9 +1203,9 @@ function initSurveyMap(attempts=0){
     scrollWheelZoom:true,
     doubleClickZoom:false,
     inertia:false,
-    zoomAnimation:true,
+    zoomAnimation:false,
     fadeAnimation:false,
-    markerZoomAnimation:true,
+    markerZoomAnimation:false,
     bounceAtZoomLimits:false,
     preferCanvas:false,
     zoomSnap:0.25,
@@ -1245,6 +1246,9 @@ function initSurveyMap(attempts=0){
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   installSurveyLineCanvas(mapEl);
   installSurveyDrawingCanvas(mapEl);
+  surveyMap.on("zoom move rotate", () => {
+    scheduleSurveyOverlayPositionRefresh();
+  });
   surveyMap.on("zoomend", () => {
     drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
@@ -1257,6 +1261,7 @@ function initSurveyMap(attempts=0){
   });
   surveyMap.on("rotate", () => {
     updateSurveyMapRotationButton();
+    scheduleSurveyOverlayPositionRefresh();
   });
   surveyMap.on("rotateend", () => {
     drawSurveyLineCanvas();
@@ -2162,6 +2167,29 @@ function scheduleSurveyDrawingCanvasRedraw(){
     surveyDrawingRedrawFrame = null;
     drawSurveyDrawingCanvas();
   });
+}
+
+function scheduleSurveyOverlayPositionRefresh(){
+  if(surveyOverlayPositionFrame) return;
+  surveyOverlayPositionFrame = window.requestAnimationFrame(() => {
+    surveyOverlayPositionFrame = null;
+    refreshSurveyOverlayPositions();
+  });
+}
+
+function refreshSurveyOverlayPositions(){
+  refreshLeafletLayerPosition(surveyLineLayer);
+  refreshLeafletLayerPosition(surveyPoleLayer);
+  refreshLeafletLayerPosition(surveyDrawingLayer);
+}
+
+function refreshLeafletLayerPosition(layer){
+  if(!layer) return;
+  if(layer.eachLayer){
+    layer.eachLayer(refreshLeafletLayerPosition);
+  }
+  if(typeof layer.redraw === "function") layer.redraw();
+  if(typeof layer.update === "function") layer.update();
 }
 
 function installSurveyLineCanvas(mapEl){
