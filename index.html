@@ -753,7 +753,7 @@ a.primary,button.primary{
       <h2>Span data</h2>
       <div class="field-row">
         <label class="sr-only" for="spanFileInput">Upload span spreadsheet files</label>
-        <input class="file-field" id="spanFileInput" type="file" accept=".csv,.xlsx,.xls" multiple>
+        <input class="file-field" id="spanFileInput" type="file" accept=".csv,.tsv,.txt,.xlsx,.xls,.ods" multiple>
       </div>
       <div class="detail status-line" id="spanDataStatus" role="status" aria-live="polite">No span spreadsheet imported on this device.</div>
       <div class="actions">
@@ -3821,7 +3821,7 @@ async function importSpanFiles(){
   const files = [...spanFileInput.files];
 
   if(!files.length){
-    setElementStatus(spanDataStatus, "Choose one or more CSV/XLSX files first.", "error");
+    setElementStatus(spanDataStatus, "Choose one or more CSV, TSV, TXT, XLS, XLSX or ODS files first.", "error");
     return;
   }
 
@@ -3832,7 +3832,7 @@ async function importSpanFiles(){
     for(const file of files){
       const rows = await readSpanFile(file);
       totalRows += rows.length;
-      imported.push(...rows.map(normaliseImportedSpan).filter(Boolean));
+      imported.push(...normaliseImportedSpans(rows));
     }
 
     if(!imported.length){
@@ -3912,25 +3912,31 @@ function normaliseAERow(row){
 async function readSpanFile(file){
   const extension = file.name.split(".").pop().toLowerCase();
 
-  if(extension === "csv"){
-    return parseCsvRows(await file.text());
+  if(["csv","tsv","txt"].includes(extension)){
+    return parseDelimitedRows(await file.text(), extension);
   }
 
-  if(extension === "xlsx" || extension === "xls"){
+  if(["xlsx","xls","ods"].includes(extension)){
     if(!window.XLSX) throw new Error("Spreadsheet reader is still loading. Try again in a few seconds.");
 
     const data = await file.arrayBuffer();
     const workbook = XLSX.read(data, { type:"array" });
     return workbook.SheetNames.flatMap((sheetName) => {
       const sheet = workbook.Sheets[sheetName];
-      return XLSX.utils.sheet_to_json(sheet, { defval:"" });
+      const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:"", blankrows:false });
+      return tableRowsToObjects(rows);
     });
   }
 
-  throw new Error("Use a CSV, XLSX, or XLS file.");
+  throw new Error("Use a CSV, TSV, TXT, XLSX, XLS, or ODS file.");
 }
 
 function parseCsvRows(text){
+  return parseDelimitedRows(text, "csv");
+}
+
+function parseDelimitedRows(text, extension="csv"){
+  const delimiter = extension === "tsv" ? "\t" : detectDelimiter(text);
   const rows = [];
   let row = [];
   let field = "";
@@ -3951,7 +3957,7 @@ function parseCsvRows(text){
       }
     }else if(char === '"'){
       quoted = true;
-    }else if(char === ","){
+    }else if(char === delimiter){
       row.push(field);
       field = "";
     }else if(char === "\n"){
@@ -3969,32 +3975,123 @@ function parseCsvRows(text){
     rows.push(row);
   }
 
-  const headers = (rows.shift() || []).map((header) => String(header).trim());
-  return rows
+  return tableRowsToObjects(rows);
+}
+
+function detectDelimiter(text){
+  const sample = String(text || "").split(/\r?\n/).slice(0, 8).join("\n");
+  const options = [",", "\t", ";"];
+  return options
+    .map((delimiter) => ({
+      delimiter,
+      count:(sample.match(new RegExp(delimiter === "\t" ? "\\t" : `\\${delimiter}`, "g")) || []).length
+    }))
+    .sort((a, b) => b.count - a.count)[0]?.delimiter || ",";
+}
+
+function tableRowsToObjects(rows){
+  const cleanRows = (Array.isArray(rows) ? rows : [])
+    .map((row) => Array.isArray(row) ? row.map((value) => String(value ?? "").trim()) : [])
+    .filter((row) => row.some(Boolean));
+  if(!cleanRows.length) return [];
+
+  const headerIndex = detectHeaderRowIndex(cleanRows);
+  const headers = makeUniqueHeaders(cleanRows[headerIndex] || []);
+  return cleanRows
+    .slice(headerIndex + 1)
     .filter((values) => values.some((value) => String(value).trim()))
     .map((values) => Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
 }
 
-function normaliseImportedSpan(row){
-  const toPole = getSpanRowValue(row, "toPole", ["ToPole", "To Pole", "toPole"]);
-  const networkNumber = getSpanRowValue(row, "networkNumber", ["Network Number", "Network No", "NetworkNumber", "networkNumber"]);
+function detectHeaderRowIndex(rows){
+  let bestIndex = 0;
+  let bestScore = -Infinity;
+  const maxRows = Math.min(rows.length, 12);
+
+  for(let index = 0; index < maxRows; index++){
+    const row = rows[index] || [];
+    const nextRows = rows.slice(index + 1, Math.min(rows.length, index + 8));
+    const nonEmpty = row.filter(Boolean).length;
+    const score = row.reduce((sum, header, columnIndex) => {
+      const samples = nextRows.map((sampleRow) => sampleRow[columnIndex] || "").filter(Boolean);
+      return sum + scorePossibleHeader(header, samples);
+    }, nonEmpty >= 3 ? 15 : 0);
+    if(score > bestScore){
+      bestScore = score;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}
+
+function scorePossibleHeader(header, samples=[]){
+  const normalised = normaliseHeader(header);
+  if(!normalised) return 0;
+  let score = 0;
+  const headerWords = [
+    "span","pole","grid","reference","ngr","latitude","longitude","easting","northing",
+    "primary","feeder","dist","distribution","circuit","contract","voltage","sub",
+    "network","asset","line"
+  ];
+  if(headerWords.some((word) => normalised.includes(word))) score += 40;
+  if(/[a-z]/i.test(header) && !/^[A-Z]{2}\d{6,12}$/i.test(compactSearchText(header))) score += 12;
+  if(samples.some((value) => scoreSpanColumn("gridRef", header, value) >= 80)) score += 25;
+  if(samples.some((value) => scoreSpanColumn("toPole", header, value) >= 80 || scoreSpanColumn("span", header, value) >= 80)) score += 18;
+  return score;
+}
+
+function makeUniqueHeaders(headers){
+  const seen = new Map();
+  return headers.map((header, index) => {
+    const base = String(header || `Column ${index + 1}`).trim() || `Column ${index + 1}`;
+    const key = normaliseHeader(base) || `column${index + 1}`;
+    const count = (seen.get(key) || 0) + 1;
+    seen.set(key, count);
+    return count === 1 ? base : `${base} ${count}`;
+  });
+}
+
+function normaliseImportedSpans(rows){
+  const cleanRows = (Array.isArray(rows) ? rows : []).filter((row) => row && Object.keys(row).length);
+  const columnMap = inferSpanColumnMap(cleanRows);
+  return cleanRows.map((row) => normaliseImportedSpan(row, columnMap)).filter(Boolean);
+}
+
+function normaliseImportedSpan(row, columnMap=null){
+  const toPole = getSpanRowValue(row, "toPole", ["ToPole", "To Pole", "toPole"], columnMap);
+  const networkNumber = getSpanRowValue(row, "networkNumber", ["Network Number", "Network No", "NetworkNumber", "networkNumber"], columnMap);
+  const easting = parseCoordinateNumber(getSpanRowValue(row, "easting", ["Easting", "Eastings", "X", "OS Easting"], columnMap));
+  const northing = parseCoordinateNumber(getSpanRowValue(row, "northing", ["Northing", "Northings", "Y", "OS Northing"], columnMap));
 
   const span = {
-    primaryNo:getSpanRowValue(row, "primaryNo", ["Primary No", "PrimaryNo", "primaryNo", "Network Number", "Network No", "NetworkNumber"]),
-    primaryName:getSpanRowValue(row, "primaryName", ["Primary Name", "PrimaryName", "primaryName"]),
-    hvFeeder:getSpanRowValue(row, "hvFeeder", ["HV Feeder", "HVFeeder", "hvFeeder"]),
-    feederName:getSpanRowValue(row, "feederName", ["Feeder Name", "FeederName", "feederName"]),
-    distNo:getSpanRowValue(row, "distNo", ["Dist No", "DistNo", "distNo"]),
-    circuitName:getSpanRowValue(row, "circuitName", ["circuitName", "Circuit Name", "CircuitName", "Contract"]),
-    voltage:getSpanRowValue(row, "voltage", ["V", "Voltage", "voltage"]),
-    span:getSpanRowValue(row, "span", ["Span", "span", "spanId"]) || toPole,
+    primaryNo:getSpanRowValue(row, "primaryNo", ["Primary No", "PrimaryNo", "primaryNo", "Network Number", "Network No", "NetworkNumber"], columnMap),
+    primaryName:getSpanRowValue(row, "primaryName", ["Primary Name", "PrimaryName", "primaryName", "Primary Sub", "Primary Substation"], columnMap),
+    hvFeeder:getSpanRowValue(row, "hvFeeder", ["HV Feeder", "HVFeeder", "hvFeeder", "Feeder No", "Feeder Number"], columnMap),
+    feederName:getSpanRowValue(row, "feederName", ["Feeder Name", "FeederName", "feederName"], columnMap),
+    distNo:getSpanRowValue(row, "distNo", ["Dist No", "DistNo", "distNo", "LV Sub No", "LV Sub Number"], columnMap),
+    circuitName:getSpanRowValue(row, "circuitName", ["circuitName", "Circuit Name", "CircuitName", "Contract", "LV Sub Name"], columnMap),
+    voltage:getSpanRowValue(row, "voltage", ["V", "Voltage", "voltage", "Network Voltage"], columnMap),
+    span:getSpanRowValue(row, "span", ["Span", "span", "spanId", "Line No", "Line Number"], columnMap) || toPole,
     toPole,
-    externalReference:getSpanRowValue(row, "externalReference", ["ExternalReference", "External Reference", "externalReference"]),
+    externalReference:getSpanRowValue(row, "externalReference", ["ExternalReference", "External Reference", "externalReference", "Reference", "Ref"], columnMap),
     networkNumber,
-    gridRef:getSpanRowValue(row, "gridRef", ["Grid Ref", "GridRef", "gridRef", "Grid Reference", "GridReference"]),
-    latitude:parseCoordinateNumber(getSpanRowValue(row, "latitude", ["latitude", "Latitude", "lat"])),
-    longitude:parseCoordinateNumber(getSpanRowValue(row, "longitude", ["longitude", "Longitude", "lon", "lng"]))
+    gridRef:getSpanRowValue(row, "gridRef", ["Grid Ref", "GridRef", "gridRef", "Grid Reference", "GridReference", "NGR", "OS Grid", "Site Grid Ref"], columnMap),
+    latitude:parseCoordinateNumber(getSpanRowValue(row, "latitude", ["latitude", "Latitude", "lat"], columnMap)),
+    longitude:parseCoordinateNumber(getSpanRowValue(row, "longitude", ["longitude", "Longitude", "lon", "lng"], columnMap)),
+    easting,
+    northing
   };
+
+  if((!span.gridRef || span.gridRef === "Unavailable") && Number.isFinite(easting) && Number.isFinite(northing)){
+    span.gridRef = formatGridRef(easting, northing);
+  }
+  if(!isUsableCoordinate(span.latitude, span.longitude) && Number.isFinite(easting) && Number.isFinite(northing)){
+    const position = eastNorthToLatLon(easting, northing);
+    span.latitude = position.lat;
+    span.longitude = position.lon;
+    span.coordinateSource = "eastNorth";
+  }
 
   if(!span.span && !span.toPole && !span.gridRef) return null;
   const repaired = repairSpanPosition(span);
@@ -4002,7 +4099,48 @@ function normaliseImportedSpan(row){
   return repaired;
 }
 
-function getSpanRowValue(row, field, names){
+function inferSpanColumnMap(rows){
+  const fields = [
+    "gridRef","latitude","longitude","easting","northing","voltage","toPole","span",
+    "primaryNo","primaryName","hvFeeder","feederName","distNo","circuitName",
+    "externalReference","networkNumber"
+  ];
+  const keys = [...new Set(rows.flatMap((row) => Object.keys(row || {})))];
+  const map = {};
+  const used = new Set();
+
+  for(const field of fields){
+    const candidates = keys
+      .filter((key) => !used.has(key))
+      .map((key) => ({
+        key,
+        score:scoreSpanColumnAcrossRows(field, key, rows)
+      }))
+      .filter((candidate) => candidate.score >= 55)
+      .sort((a, b) => b.score - a.score);
+    if(candidates[0]){
+      map[field] = candidates[0].key;
+      if(!["span","externalReference"].includes(field)) used.add(candidates[0].key);
+    }
+  }
+
+  return map;
+}
+
+function scoreSpanColumnAcrossRows(field, key, rows){
+  const values = rows.map((row) => row?.[key]).filter((value) => String(value ?? "").trim()).slice(0, 40);
+  const headerScore = scoreSpanColumn(field, key, "");
+  if(!values.length) return headerScore;
+  const valueScores = values.map((value) => scoreSpanColumn(field, key, value));
+  const average = valueScores.reduce((sum, score) => sum + score, 0) / valueScores.length;
+  const best = Math.max(...valueScores);
+  return headerScore + Math.min(70, average * 0.45) + Math.min(45, best * 0.25);
+}
+
+function getSpanRowValue(row, field, names, columnMap=null){
+  const mappedKey = columnMap?.[field];
+  if(mappedKey && String(row[mappedKey] ?? "").trim()) return String(row[mappedKey]).trim();
+
   const exact = getRowValue(row, names);
   if(exact) return exact;
 
@@ -4029,7 +4167,7 @@ function scoreSpanColumn(field, key, value){
   const hasAll = (items) => items.every((item) => header.includes(item) || headerText.includes(item));
 
   if(field === "gridRef"){
-    if(hasAny(["gridref","gridreference","ngr","osgrid","sitegrid"])) score += 90;
+    if(hasAny(["gridref","gridreference","ngr","osgrid","sitegrid","osref","mapref","grid"])) score += 90;
     if(/^[A-Z]{2}\s*\d{3,6}\s*\d{3,6}$/i.test(text) || /^[A-Z]{2}\d{6,12}$/i.test(compact)) score += 80;
   }else if(field === "latitude"){
     if(hasAny(["latitude","lat"])) score += 90;
@@ -4039,35 +4177,45 @@ function scoreSpanColumn(field, key, value){
     if(hasAny(["longitude","long","lng","lon"])) score += 90;
     const number = parseCoordinateNumber(text);
     if(number >= -9 && number <= 2) score += 45;
+  }else if(field === "easting"){
+    if(hasAny(["easting","eastings","oseasting"]) || header === "x") score += 90;
+    const number = parseCoordinateNumber(text);
+    if(number >= 0 && number <= 700000) score += 45;
+  }else if(field === "northing"){
+    if(hasAny(["northing","northings","osnorthing"]) || header === "y") score += 90;
+    const number = parseCoordinateNumber(text);
+    if(number >= 0 && number <= 1300000) score += 45;
   }else if(field === "voltage"){
-    if(hasAny(["voltage","volt","kv"]) || header === "v") score += 85;
+    if(hasAny(["voltage","volt","kv","networkvoltage"]) || header === "v") score += 85;
     if(/\b(LV|HV|11\s*kV|33\s*kV|66\s*kV|132\s*kV)\b/i.test(text)) score += 60;
   }else if(field === "toPole"){
-    if(hasAny(["topole","poleto","pole","structure","asset"])) score += 80;
+    if(hasAny(["topole","poleto","poleid","poleno","polenumber","structure","asset","support"])) score += 90;
+    if(hasAll(["to","pole"])) score += 95;
+    if(header === "pole") score += 70;
     if(/^[A-Z]{2,6}\s*\d+[A-Z]?$/i.test(text) || /^[A-Z0-9]+\/\d+$/i.test(text)) score += 45;
   }else if(field === "span"){
-    if(hasAny(["span","spanid","section","lineno","linenumber"])) score += 90;
+    if(hasAny(["span","spanid","section","lineno","linenumber","lineid","circuitsection"])) score += 90;
     if(/^[A-Z0-9-]+\/?\d*[A-Z]?$/i.test(text) && /\d/.test(text)) score += 40;
   }else if(field === "primaryNo"){
-    if(hasAll(["primary","no"]) || hasAll(["primary","number"]) || hasAny(["primaryno","primarynumber","networknumber","networkno"])) score += 90;
+    if(hasAll(["primary","no"]) || hasAll(["primary","number"]) || hasAny(["primaryno","primarynumber","networknumber","networkno","primarysubno"])) score += 90;
     if(/^\d{2,6}(\/\d{1,6})?$/.test(text)) score += 35;
   }else if(field === "primaryName"){
-    if(hasAll(["primary","name"]) || hasAll(["sub","name"]) || hasAny(["primaryname","substationname"])) score += 90;
+    if(hasAll(["primary","name"]) || hasAll(["primary","sub"]) || hasAny(["primaryname","substationname","primarysubname"])) score += 90;
     if(/[A-Za-z]{3,}/.test(text) && !/\b(LV|HV|kV)\b/i.test(text)) score += 25;
   }else if(field === "hvFeeder"){
-    if(hasAll(["hv","feeder"]) || hasAll(["11kv","feeder"]) || hasAny(["hvfeeder"])) score += 95;
+    if(hasAll(["hv","feeder"]) || hasAll(["11kv","feeder"]) || hasAny(["hvfeeder","feederno","feedernumber"])) score += 95;
     if(/\b(HV|11\s*kV|33\s*kV)\b/i.test(text)) score += 30;
   }else if(field === "feederName"){
     if(hasAll(["feeder","name"]) || hasAny(["feedername"])) score += 90;
   }else if(field === "distNo"){
-    if(hasAny(["distno","distributionno","distributionsubno","lvsubno"]) || hasAll(["dist","no"]) || hasAll(["sub","no"])) score += 90;
+    if(hasAny(["distno","distributionno","distributionsubno","lvsubno","lvsubnumber"]) || hasAll(["dist","no"]) || hasAll(["sub","no"])) score += 90;
     if(/^\d{2,6}$/.test(text)) score += 25;
   }else if(field === "circuitName"){
-    if(hasAny(["circuitname","contract","lvsubname"]) || hasAll(["circuit","name"])) score += 90;
+    if(hasAny(["circuitname","contract","lvsubname","lvsubstationname"]) || hasAll(["circuit","name"]) || hasAll(["lv","name"])) score += 90;
   }else if(field === "externalReference"){
-    if(hasAny(["externalreference","externalref","reference","ref"])) score += 85;
+    if(hasAny(["externalreference","externalref","reference","ref","id"])) score += 85;
   }else if(field === "networkNumber"){
-    if(hasAny(["networknumber","networkno","assetnumber"])) score += 90;
+    if(hasAny(["networknumber","networkno","assetnumber","assetno"])) score += 90;
   }
 
   return score;
@@ -4219,6 +4367,7 @@ function scoreSpanMatch(span, terms){
     [span.toPole, 70],
     [span.externalReference, 70],
     [span.gridRef, 60],
+    [formatSpreadsheetGridRef(span.gridRef || ""), 75],
     [span.hvFeeder, 50],
     [span.circuitName, 45],
     [span.distNo, 40],
@@ -4293,11 +4442,12 @@ function stripLeadingZeroes(value){
 
 function renderSpanSearchResult(span, index){
   const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
+  const voltage = voltageLabel(span.voltage);
   const mainValue = isLv && span.toPole
     ? `LV To Pole ${span.toPole}`
-    : `${span.voltage || "Unknown"} ${span.span || "Unknown span"}`;
+    : `${voltage || "Unknown"} ${span.span || "Unknown span"}`;
   const detail = isLv
-    ? `${span.voltage || "LV"} span ${span.span || "Unknown span"}`
+    ? `${voltage || "LV"} span ${span.span || "Unknown span"}`
     : "";
 
   return `
@@ -4305,7 +4455,7 @@ function renderSpanSearchResult(span, index){
       <h2>Span match</h2>
       <div class="value">${escapeHtml(mainValue)}</div>
       ${detail ? `<div class="detail">${escapeHtml(detail)}</div>` : ""}
-      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(`${span.primaryNo || ""} ${span.primaryName || ""}`.trim() || "Not listed")}</div>
+      <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(primarySubValue(span) || "Not listed")}</div>
       <div class="asset-line"><strong>HV feeder:</strong> ${escapeHtml(span.hvFeeder || "Not listed")}</div>
       <div class="asset-line"><strong>Dist/circuit:</strong> ${escapeHtml([span.distNo, span.circuitName].filter(Boolean).join(" / ") || "Not listed")}</div>
       <div class="asset-line"><strong>To pole:</strong> ${escapeHtml(span.toPole || "Not listed")}</div>
@@ -4354,7 +4504,7 @@ function fillFromSpanRecord(span){
     sourceNote: "Filled from your uploaded span spreadsheet."
   });
 
-  setElementStatus(spanSearchStatus, `Filled from ${span.voltage || "span"} ${span.span || ""}.`, "success");
+  setElementStatus(spanSearchStatus, `Filled from ${voltageLabel(span.voltage) || "span"} ${span.span || ""}.`, "success");
   spanSearchInput.value = "";
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
@@ -4423,12 +4573,13 @@ function renderNearestSpanChoices(spans, accuracy){
 
 function renderNearestSpanChoice(span, index){
   const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
+  const voltage = voltageLabel(span.voltage);
   const mainValue = isLv && span.toPole
     ? `LV To Pole ${span.toPole}`
-    : `${span.voltage || "Unknown"} ${span.span || "Unknown span"}`;
+    : `${voltage || "Unknown"} ${span.span || "Unknown span"}`;
   const detailParts = [
     Number.isFinite(span.distanceM) ? `${span.distanceM} m away` : "",
-    isLv ? `${span.voltage || "LV"} span ${span.span || "Unknown span"}` : ""
+    isLv ? `${voltage || "LV"} span ${span.span || "Unknown span"}` : ""
   ].filter(Boolean);
 
   return `
@@ -4667,7 +4818,7 @@ function renderSpanCard(span, title="Nearest span from your data"){
   return `
     <article class="card" id="span">
       <h2>${escapeHtml(title)}</h2>
-      <div class="value">${escapeHtml(`${span.voltage || "Unknown"} ${span.span || "Unknown span"}`)}</div>
+      <div class="value">${escapeHtml(`${voltageLabel(span.voltage) || "Unknown"} ${span.span || "Unknown span"}`)}</div>
       <div class="detail">${escapeHtml(detail)}</div>
       <div class="state-pill">Selected for paperwork and map centering</div>
       <div class="asset-line"><strong>Primary:</strong> ${escapeHtml(primarySubValue(span) || "Not listed")}</div>
@@ -4741,6 +4892,14 @@ function primarySubValue(span){
   return `${span.primaryNo || ""} ${cleanPrimaryName(span.primaryName)}`.trim();
 }
 
+function voltageLabel(value){
+  const text = String(value || "").trim();
+  if(!text) return "";
+  if(/^lv$/i.test(text)) return "LV";
+  if(/^hv$/i.test(text)) return "HV";
+  return text.replace(/\b(lv|hv)\b/ig, (match) => match.toUpperCase());
+}
+
 function cleanPrimaryName(name){
   return String(name || "")
     .replace(/\s*132\s*\/\s*11\s*kV\s*DUMMY\s*/ig, "")
@@ -4752,7 +4911,7 @@ function cleanPrimaryName(name){
 function spanCopyText(span){
   if(!span) return "";
   return [
-    `Voltage: ${span.voltage || ""}`,
+    `Voltage: ${voltageLabel(span.voltage) || ""}`,
     `Span: ${span.span || ""}`,
     `To pole: ${span.toPole || ""}`,
     `Primary: ${primarySubValue(span)}`,
@@ -5035,6 +5194,7 @@ function formatGridRef(easting, northing){
   const n = Math.floor((northing % 100000) / 100).toString().padStart(3,"0");
   return `${letters}${e}${n}`;
 }
+
 </script>
 </body>
 </html>
