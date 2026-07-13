@@ -1780,6 +1780,47 @@ function renderSurveyLineRuns(points){
       }
     }
   }
+
+  renderPrefixBranchJoins(groups);
+}
+
+function renderPrefixBranchJoins(groups){
+  for(const group of groups.values()){
+    const childStart = firstMainPoleInGroup(group);
+    if(!childStart?.prefix || childStart.prefix === "UNKNOWN") continue;
+
+    const parentPrefix = childStart.prefix.slice(0, -1);
+    if(parentPrefix.length < 4) continue;
+
+    const parentGroup = groups.get(`${childStart.network}|${parentPrefix}`);
+    if(!parentGroup) continue;
+
+    const parent = nearestMainPole(childStart, parentGroup);
+    if(!parent) continue;
+
+    const distanceM = haversineKm(childStart.lat, childStart.lon, parent.lat, parent.lon) * 1000;
+    if(distanceM > 350) continue;
+
+    drawSurveyAutoNetworkLine(parent, childStart, distanceM > 250);
+  }
+}
+
+function firstMainPoleInGroup(group){
+  return group
+    .filter((point) => Number.isFinite(point.number) && !point.suffix)
+    .sort((a, b) => a.number - b.number)[0] || null;
+}
+
+function nearestMainPole(target, group){
+  let best = null;
+  for(const point of group){
+    if(!Number.isFinite(point.number) || point.suffix) continue;
+    const distanceM = haversineKm(target.lat, target.lon, point.lat, point.lon) * 1000;
+    if(!best || distanceM < best.distanceM){
+      best = { point, distanceM };
+    }
+  }
+  return best?.point || null;
 }
 
 function shouldUseDistanceNetwork(group, numbered){
