@@ -1151,6 +1151,10 @@ async function copyText(encoded){
 
 function switchView(view){
   const showMap = view === "map";
+  const wasMap = document.body.classList.contains("map-mode");
+  if(wasMap && !showMap){
+    discardTemporaryMapDrawings();
+  }
   document.body.classList.toggle("map-mode", showMap);
   locatorView.classList.toggle("hidden", showMap);
   mapView.classList.toggle("hidden", !showMap);
@@ -1290,7 +1294,7 @@ function initSurveyMap(attempts=0){
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
   renderSurveyMap(true);
-  restoreMapDrawings();
+  activeMapDrawingKey = currentReport?.nearestSpan ? mapDrawingKeyForSpan(currentReport.nearestSpan) : "";
 }
 
 function setSurveyMapStatus(message){
@@ -1722,7 +1726,7 @@ function installSurveyTouchHandlers(mapEl){
       else addSurveyShapeFromStroke(completedTool, strokePoints, strokeMoved);
       setMapTool("pan");
       if(completedTool === "route" && strokeMoved){
-        setSurveyMapStatus("Access route drawn and saved.");
+        setSurveyMapStatus("Access route added for this map view.");
       }
       strokePoints = [];
       setTimeout(() => {
@@ -2969,6 +2973,11 @@ function createId(prefix){
 }
 
 function setMapTool(tool, force=false){
+  if(!force && ["tree","group","route","label"].includes(tool) && !hasActiveMapDrawingSpan()){
+    setMapTool("pan", true);
+    setSurveyMapStatus("Select a span first, then add drawings for that span.");
+    return;
+  }
   if(!force && ["pole","tree","group","link","unlink","route","label","delete"].includes(tool) && mapTool === tool){
     tool = "pan";
   }
@@ -3076,12 +3085,12 @@ function addSurveyShapeFromStroke(kind, points, wasDrawn=false){
 
 function addAccessRouteFromStroke(points, wasDrawn=false){
   if(!surveyDrawingLayer || points.length < 2 || !wasDrawn){
-    setSurveyMapStatus("Draw the access route, then lift to save it.");
+    setSurveyMapStatus("Draw the access route, then lift to add it.");
     return;
   }
   createAccessRoute(simplifyRoutePoints(points));
   saveMapDrawings();
-  setSurveyMapStatus("Access route drawn and saved.");
+  setSurveyMapStatus("Access route added for this map view.");
 }
 
 function simplifyRoutePoints(points){
@@ -3164,7 +3173,7 @@ function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
   setMapTool("pan");
   selectDrawing(drawing);
   saveMapDrawings();
-  setSurveyMapStatus(`${text} added and saved on this device. One finger moves it. Two fingers resize and rotate it.`);
+  setSurveyMapStatus(`${text} added for this map view. One finger moves it. Two fingers resize and rotate it.`);
 }
 
 function createDrawingItem(shape, labelPosition, text, type="shape", meta={}){
@@ -3601,7 +3610,7 @@ function renameDrawingItem(drawing){
       recalculateDrawCounters();
       saveMapDrawings();
       selectDrawing(drawing);
-      setSurveyMapStatus(`Renamed to ${next} and saved on this device.`);
+      setSurveyMapStatus(`Renamed to ${next} for this map view.`);
     }
   });
 }
@@ -3663,7 +3672,7 @@ function removeDrawingItem(item){
   updateRouteControls();
   syncMapMovementState();
   if(mapTool === "delete") setMapTool("pan", true);
-  setSurveyMapStatus("Drawing removed and saved on this device.");
+  setSurveyMapStatus("Drawing removed.");
 }
 
 function moveDrawingTo(drawing, newCenter){
@@ -3944,15 +3953,21 @@ function mapDrawingStorageKey(key=activeMapDrawingKey || "general"){
   return `treeSurveyMapDrawings:${key}`;
 }
 
+function hasActiveMapDrawingSpan(){
+  return Boolean(activeMapDrawingKey && activeMapDrawingKey !== "general");
+}
+
 function switchMapDrawingSpan(span){
-  const nextKey = mapDrawingKeyForSpan(span);
+  const nextKey = span ? mapDrawingKeyForSpan(span) : "";
   if(activeMapDrawingKey === nextKey) return;
-  if(activeMapDrawingKey){
-    saveMapDrawings();
-  }
+  discardTemporaryMapDrawings();
   activeMapDrawingKey = nextKey;
   clearRenderedMapDrawings();
-  restoreMapDrawings();
+}
+
+function discardTemporaryMapDrawings(){
+  if(hasActiveMapDrawingSpan()) localStorage.removeItem(mapDrawingStorageKey());
+  clearRenderedMapDrawings();
 }
 
 function clearRenderedMapDrawings(){
@@ -3984,107 +3999,12 @@ function clearAllMapDrawingStorage(){
 }
 
 function saveMapDrawings(){
-  if(restoringMapDrawings) return;
-  try{
-    const records = [];
-    for(const item of mapDrawingStack){
-      if(item?.group && item.shape && item.label){
-        const center = item.label.getLatLng();
-        if(item.type === "circle"){
-          records.push({
-            kind:"drawing",
-            type:"circle",
-            text:item.text,
-            center:compactLatLng(center),
-            radius:Math.round((item.baseRadius || item.shape.getRadius()) * 100) / 100,
-            radiusUnits:item.radiusUnits || "px",
-            baseZoom:Number.isFinite(Number(item.baseZoom)) ? Number(item.baseZoom) : currentSurveyZoom()
-          });
-        }else if(item.shape.getLatLngs){
-          records.push({
-            kind:"drawing",
-            type:"rectangle",
-            text:item.text,
-            center:compactLatLng(center),
-            corners:getPolygonCorners(item).map(compactLatLng),
-            baseZoom:Number.isFinite(Number(item.baseZoom)) ? Number(item.baseZoom) : currentSurveyZoom()
-          });
-        }
-      }else if(item?.itemType === "route" && item.getLatLngs){
-        const points = item.getLatLngs().map(compactLatLng);
-        if(points.length) records.push({ kind:"route", points });
-      }else if(item?.itemType === "label" && item.getLatLng){
-        records.push({
-          kind:"label",
-          text:item.labelText || "Label",
-          position:compactLatLng(item.getLatLng())
-        });
-      }
-    }
-
-    if(records.length){
-      localStorage.setItem(mapDrawingStorageKey(), JSON.stringify(records));
-    }else{
-      localStorage.removeItem(mapDrawingStorageKey());
-    }
-  }catch{
-    setSurveyMapStatus("Map markings changed, but this browser could not save them locally.");
-  }
+  // Drawn survey marks are temporary field notes for the current map view.
+  // They stay visible while the map is open, then clear when the user leaves or switches spans.
 }
 
 function restoreMapDrawings(){
-  if(!surveyDrawingLayer || !window.L) return;
-  try{
-    if(!activeMapDrawingKey) activeMapDrawingKey = mapDrawingKeyForSpan();
-    const stored = localStorage.getItem(mapDrawingStorageKey()) ||
-      (activeMapDrawingKey === "general" ? localStorage.getItem("treeSurveyMapDrawings") : "");
-    if(!stored) return;
-    const records = JSON.parse(stored);
-    if(!Array.isArray(records) || mapDrawingStack.length) return;
-
-    restoringMapDrawings = true;
-    for(const record of records){
-      if(record.kind === "drawing" && record.type === "circle" && record.center){
-        const center = L.latLng(record.center.lat, record.center.lng);
-        const savedRadius = Number(record.radius);
-        const radius = record.radiusUnits === "px" && Number.isFinite(savedRadius)
-          ? Math.max(18, Math.min(120, savedRadius))
-          : 29;
-        const baseZoom = Number.isFinite(Number(record.baseZoom)) ? Number(record.baseZoom) : currentSurveyZoom();
-        const shape = L.circleMarker(center, {
-          radius,
-          ...drawingShapeStyle(false),
-          fill:true,
-          fillColor:"#5fbd65",
-          className:"survey-drawing-shape"
-        });
-        createDrawingItem(shape, center, record.text || "T1", "circle", { radius, baseRadius:radius, radiusUnits:"px", baseZoom });
-      }else if(record.kind === "drawing" && record.corners?.length){
-        const corners = record.corners.map((point) => L.latLng(point.lat, point.lng));
-        const center = record.center ? L.latLng(record.center.lat, record.center.lng) : L.latLngBounds(corners).getCenter();
-        const baseZoom = Number.isFinite(Number(record.baseZoom)) ? Number(record.baseZoom) : currentSurveyZoom();
-        const shape = L.polygon(corners, {
-          ...drawingShapeStyle(false),
-          fill:true,
-          fillColor:"#5fbd65",
-          className:"survey-drawing-shape"
-        });
-        createDrawingItem(shape, center, record.text || "G1", "rectangle", { baseZoom });
-      }else if(record.kind === "route" && record.points?.length){
-        createAccessRoute(record.points.map((point) => L.latLng(point.lat, point.lng)));
-      }else if(record.kind === "label" && record.position){
-        createTextLabel(L.latLng(record.position.lat, record.position.lng), record.text || "Label");
-      }
-    }
-    recalculateDrawCounters();
-    drawSurveyDrawingCanvas();
-    setSurveyMapStatus(`${mapDrawingStack.length} saved map mark${mapDrawingStack.length === 1 ? "" : "s"} restored on this device.`);
-  }catch{
-    localStorage.removeItem(mapDrawingStorageKey());
-    setSurveyMapStatus("Saved map markings could not be read, so they were reset.");
-  }finally{
-    restoringMapDrawings = false;
-  }
+  clearAllMapDrawingStorage();
 }
 
 function createAccessRoute(points){
@@ -4118,7 +4038,7 @@ function addSurveyTextLabel(latlng){
       createTextLabel(latlng, text);
       saveMapDrawings();
       setMapTool("pan", true);
-      setSurveyMapStatus(`Label "${text}" added and saved.`);
+      setSurveyMapStatus(`Label "${text}" added for this map view.`);
     }
   });
 }
