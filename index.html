@@ -1202,9 +1202,9 @@ function initSurveyMap(attempts=0){
     scrollWheelZoom:true,
     doubleClickZoom:false,
     inertia:false,
-    zoomAnimation:false,
+    zoomAnimation:true,
     fadeAnimation:false,
-    markerZoomAnimation:false,
+    markerZoomAnimation:true,
     bounceAtZoomLimits:false,
     preferCanvas:false,
     zoomSnap:0.25,
@@ -1214,7 +1214,7 @@ function initSurveyMap(attempts=0){
     maxZoom:22,
     maxBoundsViscosity:1.0
   }).setView([52.68, -1.82], 13);
-  surveyNetworkRenderer = L.canvas({ padding:0.5 });
+  surveyNetworkRenderer = L.svg({ padding:0.7 });
   surveyMap.createPane("drawingLabelPane");
   surveyMap.getPane("drawingLabelPane").style.zIndex = 720;
   surveyMap.createPane("drawingHitPane");
@@ -1245,25 +1245,28 @@ function initSurveyMap(attempts=0){
   surveyDrawingLayer = L.layerGroup().addTo(surveyMap);
   installSurveyLineCanvas(mapEl);
   installSurveyDrawingCanvas(mapEl);
-  surveyMap.on("zoom move rotate resize", () => {
-    refreshSurveyLineDisplay();
-  });
   surveyMap.on("zoomend", () => {
     drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
   });
   surveyMap.on("moveend", () => {
+    drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
   });
   surveyMap.on("rotate", () => {
     updateSurveyMapRotationButton();
-    refreshSurveyLineDisplay();
   });
   surveyMap.on("rotateend", () => {
-    scheduleSurveyLineRedrawAfterRotate();
+    drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
+    refreshSurveyPoleMarkers();
+  });
+  surveyMap.on("resize", () => {
+    drawSurveyLineCanvas();
+    drawSurveyDrawingCanvas();
+    refreshSurveyPoleMarkers();
   });
   installSurveyTouchHandlers(mapEl);
   unlockSurveyFrame(false);
@@ -2198,18 +2201,18 @@ function clearSurveyLineCanvas(){
 function surveyNetworkStyleForZoom(){
   const zoom = surveyMap?.getZoom?.() || 13;
   if(zoom < 13.5){
-    return { lineWeight:1.05, lineOpacity:0.6, poleRadius:1.75, poleOpacity:0.64, dashGap:"1 10", showGapLines:false };
+    return { lineWeight:1.55, lineOpacity:0.88, poleRadius:1.9, poleOpacity:0.78, dashGap:"4 9", showGapLines:false };
   }
   if(zoom < 15){
-    return { lineWeight:1.35, lineOpacity:0.68, poleRadius:2.15, poleOpacity:0.72, dashGap:"1 11", showGapLines:false };
+    return { lineWeight:1.85, lineOpacity:0.9, poleRadius:2.25, poleOpacity:0.84, dashGap:"4 10", showGapLines:false };
   }
   if(zoom < 16.5){
-    return { lineWeight:1.7, lineOpacity:0.78, poleRadius:2.7, poleOpacity:0.82, dashGap:"1 12", showGapLines:true };
+    return { lineWeight:2.05, lineOpacity:0.9, poleRadius:2.8, poleOpacity:0.88, dashGap:"4 11", showGapLines:true };
   }
   if(zoom < 18){
-    return { lineWeight:2.2, lineOpacity:0.88, poleRadius:3.45, poleOpacity:0.9, dashGap:"1 13", showGapLines:true };
+    return { lineWeight:2.55, lineOpacity:0.94, poleRadius:3.55, poleOpacity:0.93, dashGap:"4 12", showGapLines:true };
   }
-  return { lineWeight:3, lineOpacity:0.95, poleRadius:4.5, poleOpacity:0.96, dashGap:"1 14", showGapLines:true };
+  return { lineWeight:3.15, lineOpacity:0.98, poleRadius:4.55, poleOpacity:0.96, dashGap:"4 13", showGapLines:true };
 }
 
 function drawSurveyLineCanvas(){
