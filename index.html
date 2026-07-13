@@ -507,6 +507,7 @@ body.map-mode #surveyMap{
   inset:0;
   z-index:430;
   pointer-events:none;
+  display:none;
 }
 .survey-drawing-canvas{
   position:absolute;
@@ -1244,10 +1245,9 @@ function initSurveyMap(attempts=0){
   installSurveyLineCanvas(mapEl);
   installSurveyDrawingCanvas(mapEl);
   surveyMap.on("zoom move rotate resize", () => {
-    scheduleSurveyCanvasRedraw();
+    scheduleSurveyDrawingCanvasRedraw();
   });
   surveyMap.on("zoomend moveend", () => {
-    drawSurveyLineCanvas();
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
   });
@@ -1350,7 +1350,6 @@ function scheduleSurveyLineRedrawAfterRotate(){
   window.clearTimeout(rotateRedrawTimer);
   rotateRedrawTimer = window.setTimeout(() => {
     if(!surveyMapRendered) return;
-    drawSurveyLineCanvas();
     refreshSurveyPoleMarkers();
   }, 180);
 }
@@ -2178,32 +2177,24 @@ function clearSurveyLineCanvas(){
 }
 
 function drawSurveyLineCanvas(){
-  if(!surveyLineCanvasCtx || !surveyMap) return;
+  if(!surveyMap || !surveyLineLayer) return;
+  surveyLineLayer.clearLayers();
   resizeSurveyLineCanvas();
   clearSurveyLineCanvas();
   if(!surveyLineShapes.length) return;
 
-  const ctx = surveyLineCanvasCtx;
-  ctx.save();
-  ctx.lineWidth = 3.5;
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.globalAlpha = 0.95;
-
   for(const line of surveyLineShapes){
-    const points = line.latlngs.map((latlng) => surveyMap.latLngToContainerPoint(latlng));
-    if(points.length < 2) continue;
-    ctx.strokeStyle = line.lineColor || "#2648d8";
-    ctx.setLineDash(line.isGap ? [1, 14] : []);
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
-    for(let i = 1; i < points.length; i++){
-      ctx.lineTo(points[i].x, points[i].y);
-    }
-    ctx.stroke();
+    if(!line.latlngs || line.latlngs.length < 2) continue;
+    L.polyline(line.latlngs, {
+      color:line.lineColor || "#2648d8",
+      weight:3.5,
+      opacity:0.95,
+      lineCap:"round",
+      lineJoin:"round",
+      dashArray:line.isGap ? "1 14" : null,
+      interactive:false
+    }).addTo(surveyLineLayer);
   }
-
-  ctx.restore();
 }
 
 function installSurveyDrawingCanvas(mapEl){
