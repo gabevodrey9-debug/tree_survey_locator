@@ -529,7 +529,7 @@ body.map-mode #surveyMap{
   display:grid;
   gap:8px;
 }
-.map-toolbar{grid-template-columns:repeat(12,minmax(0,1fr));margin-top:10px}
+.map-toolbar{grid-template-columns:repeat(11,minmax(0,1fr));margin-top:10px}
 .map-actions{
   grid-template-columns:repeat(4,minmax(0,1fr));
   margin-top:10px;
@@ -808,7 +808,6 @@ a.primary,button.primary{
         <button class="small" id="tool-link" type="button" onclick="setMapTool('link')" aria-label="Link two poles" data-full-label="Link" data-icon-key="link">Link</button>
         <button class="small" id="tool-unlink" type="button" onclick="setMapTool('unlink')" aria-label="Unlink two poles" data-full-label="Unlink" data-icon-key="unlink">Unlink</button>
         <button class="small" id="tool-route" type="button" onclick="setMapTool('route')" aria-label="Draw access route" data-full-label="Access" data-icon-key="route">Access</button>
-        <button class="small" id="finishRouteBtn" type="button" onclick="finishAccessRoute()" aria-label="Finish access route" data-full-label="Finish route" data-icon-key="finish" disabled>Finish route</button>
         <button class="small" id="tool-label" type="button" onclick="setMapTool('label')" aria-label="Add text label" data-full-label="Label" data-icon-key="label">Label</button>
         <button class="small edit-action" id="renameDrawingBtn" type="button" onclick="renameSelectedDrawing()" aria-label="Rename selected tree or group" data-full-label="Rename" data-icon-key="rename" disabled>Rename</button>
         <button class="small danger" id="tool-delete" type="button" onclick="setMapTool('delete')" aria-label="Delete selected map item" data-full-label="Delete" data-icon-key="delete">Delete</button>
@@ -851,7 +850,6 @@ const MAP_TOOL_ICONS = {
   link:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h4"/></svg>`,
   unlink:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7" cy="12" r="3"/><circle cx="17" cy="12" r="3"/><path d="M10 12h1.5"/><path d="M14 12h.5"/><path d="M12 7l-1 3"/><path d="M13 14l-1 3"/></svg>`,
   route:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18c4-9 8 2 12-7 1.4-3.1 2.7-4.3 4-5"/><path d="M4 18l3-1"/><path d="M4 18l1 3"/></svg>`,
-  finish:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/><path d="M5 5h14"/></svg>`,
   label:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14v10H5z"/><path d="M8 15V9"/><path d="M8 9h5"/><path d="M8 12h4"/></svg>`,
   rename:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 18.5l4.2-1 9-9a2 2 0 0 0-2.8-2.8l-9 9L5 18.5z"/><path d="M13.5 7.5l3 3"/></svg>`,
   delete:`<svg class="map-tool-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7h14"/><path d="M9 7V5h6v2"/><path d="M7 7l1 13h8l1-13"/><path d="M10 11v5"/><path d="M14 11v5"/></svg>`,
@@ -1366,7 +1364,7 @@ function installSurveyTouchHandlers(mapEl){
       return;
     }
 
-    if(!surveyMap || !mapLocked || mapTool !== "group") return;
+    if(!surveyMap || !mapLocked || !["group","route"].includes(mapTool)) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation?.();
@@ -1375,10 +1373,10 @@ function installSurveyTouchHandlers(mapEl){
     strokeMoved = false;
     strokePoints = [latLngFromPointerEvent(event)];
     activeStrokePreview = L.polyline(strokePoints, {
-      color:"#5fbd65",
+      color:mapTool === "route" ? "#f4c430" : "#5fbd65",
       weight:5,
       opacity:0.95,
-      dashArray:"8 6",
+      dashArray:mapTool === "route" ? null : "8 6",
       interactive:false
     }).addTo(surveyDrawingLayer);
   }, { passive:false, capture:true });
@@ -1499,8 +1497,13 @@ function installSurveyTouchHandlers(mapEl){
         surveyDrawingLayer.removeLayer(activeStrokePreview);
         activeStrokePreview = null;
       }
-      addSurveyShapeFromStroke(mapTool, strokePoints, strokeMoved);
+      const completedTool = mapTool;
+      if(completedTool === "route") addAccessRouteFromStroke(strokePoints, strokeMoved);
+      else addSurveyShapeFromStroke(completedTool, strokePoints, strokeMoved);
       setMapTool("pan");
+      if(completedTool === "route" && strokeMoved){
+        setSurveyMapStatus("Access route drawn and saved.");
+      }
       strokePoints = [];
       setTimeout(() => {
         suppressClick = false;
@@ -2630,7 +2633,7 @@ function setMapTool(tool, force=false){
     group:"Draw around the group. The app will tidy it into the closest shape.",
     link:"Tap one pole, then tap the pole it should link to.",
     unlink:"Tap one pole, then tap the pole it should unlink from.",
-    route:"Tap along the access route. Press Finish route when done.",
+    route:"Draw the access route. Lift your finger to save it.",
     label:"Tap the map, then type a label.",
     delete:"Tap a drawn mark, manual link, or pole to remove it."
   };
@@ -2643,7 +2646,7 @@ function updateMapMovementForTool(){
 
 function syncMapMovementState(){
   if(!surveyMap) return;
-  if(mapLocked && (mapTool === "group" || selectedDrawing)){
+  if(mapLocked && (mapTool === "group" || mapTool === "route" || selectedDrawing)){
     disableSurveyMapMovement();
   }else{
     enableSurveyMapMovement();
@@ -2666,7 +2669,7 @@ function handleSurveyMapClick(event){
 }
 
 function isPointMapTool(){
-  return ["pole","tree","route","label"].includes(mapTool);
+  return ["pole","tree","label"].includes(mapTool);
 }
 
 function isLeafletControlTarget(target){
@@ -2688,7 +2691,6 @@ function applySurveyMapTool(latlng){
   if(mapTool === "pole") addMapPole(latlng);
   else if(mapTool === "tree") addSurveyCircleShape("tree", [latlng]);
   else if(mapTool === "group") return;
-  else if(mapTool === "route") addAccessRoutePoint(latlng);
   else if(mapTool === "label") addSurveyTextLabel(latlng);
 }
 
@@ -2697,6 +2699,31 @@ function addSurveyShapeFromStroke(kind, points, wasDrawn=false){
   const shapeType = wasDrawn ? closestStrokeShape(points) : "circle";
   if(shapeType === "rectangle") addSurveyRectangleShape(kind, points);
   else addSurveyCircleShape(kind, points);
+}
+
+function addAccessRouteFromStroke(points, wasDrawn=false){
+  if(!surveyDrawingLayer || points.length < 2 || !wasDrawn){
+    setSurveyMapStatus("Draw the access route, then lift to save it.");
+    return;
+  }
+  createAccessRoute(simplifyRoutePoints(points));
+  saveMapDrawings();
+  setSurveyMapStatus("Access route drawn and saved.");
+}
+
+function simplifyRoutePoints(points){
+  if(points.length <= 2) return points;
+  const simplified = [points[0]];
+  let last = surveyMap.latLngToContainerPoint(points[0]);
+  for(let i = 1; i < points.length - 1; i++){
+    const current = surveyMap.latLngToContainerPoint(points[i]);
+    if(current.distanceTo(last) >= 8){
+      simplified.push(points[i]);
+      last = current;
+    }
+  }
+  simplified.push(points[points.length - 1]);
+  return simplified;
 }
 
 function addSurveyCircleShape(kind, points){
@@ -3577,19 +3604,6 @@ function restoreMapDrawings(){
   }
 }
 
-function addAccessRoutePoint(latlng){
-  activeRoutePoints.push(latlng);
-
-  if(!activeRoute){
-    activeRoute = createAccessRoute([]);
-  }
-
-  activeRoute.setLatLngs(activeRoutePoints);
-  saveMapDrawings();
-  updateRouteControls();
-  setSurveyMapStatus(`${activeRoutePoints.length} access route point${activeRoutePoints.length === 1 ? "" : "s"} added. Tap Finish Route when done.`);
-}
-
 function createAccessRoute(points){
   const route = L.polyline(points, {
     color:"#f4c430",
@@ -3612,19 +3626,6 @@ function createAccessRoute(points){
   return route;
 }
 
-function finishAccessRoute(){
-  if(!activeRoute){
-    setSurveyMapStatus("No active access route to finish.");
-    updateRouteControls();
-    return;
-  }
-  activeRoute = null;
-  activeRoutePoints = [];
-  setMapTool("pan", true);
-  updateRouteControls();
-  setSurveyMapStatus("Access route finished.");
-}
-
 function addSurveyTextLabel(latlng){
   requestTextValue({
     title:"Add label",
@@ -3640,8 +3641,6 @@ function addSurveyTextLabel(latlng){
 }
 
 function updateRouteControls(){
-  const finishButton = document.getElementById("finishRouteBtn");
-  if(finishButton) finishButton.disabled = !(activeRoute && activeRoutePoints.length);
 }
 
 function createTextLabel(latlng, text){
