@@ -712,6 +712,9 @@ body.map-mode #surveyMap{
   color:#111;
   font:800 24px Inter,Arial,sans-serif;
   text-shadow:0 1px 2px #fff, 0 -1px 2px #fff, 1px 0 2px #fff, -1px 0 2px #fff;
+  transform:scale(var(--draw-label-scale, 1));
+  transform-origin:center;
+  will-change:transform;
 }
 .pole-label{
   color:#101010;
@@ -1029,6 +1032,7 @@ let surveyDrawingCanvas = null;
 let surveyDrawingCanvasCtx = null;
 let surveyDrawingCanvasSize = { width:0, height:0, ratio:0 };
 let surveyDrawingRedrawFrame = null;
+let surveyDrawingScaleFrame = null;
 let surveyDrawingLayer = null;
 let surveyPoleBounds = null;
 let mapTool = "pan";
@@ -1248,6 +1252,7 @@ function initSurveyMap(attempts=0){
   installSurveyDrawingCanvas(mapEl);
   surveyMap.on("zoom move rotate", () => {
     scheduleSurveyOverlayPositionRefresh();
+    scheduleSurveyDrawingScaleRefresh();
   });
   surveyMap.on("zoomend", () => {
     drawSurveyLineCanvas();
@@ -2988,7 +2993,12 @@ function addSurveyCircleShape(kind, points){
     fillColor:"#5fbd65",
     className:"survey-drawing-shape"
   });
-  addNumberedDrawing(shape, center, text, "circle", { radius, radiusUnits:"px" });
+  addNumberedDrawing(shape, center, text, "circle", {
+    radius,
+    baseRadius:radius,
+    radiusUnits:"px",
+    baseZoom:currentSurveyZoom()
+  });
 }
 
 function addSurveyRectangleShape(kind, points){
@@ -3034,7 +3044,7 @@ function addNumberedDrawing(shape, labelPosition, text, type="shape", meta={}){
 function createDrawingItem(shape, labelPosition, text, type="shape", meta={}){
   const label = L.marker(labelPosition, {
     draggable:false,
-    icon:drawingLabelIcon(text),
+    icon:drawingLabelIcon(text, drawingZoomScale(meta.baseZoom)),
     zIndexOffset:2000
   });
   const group = L.layerGroup([shape, label]).addTo(surveyDrawingLayer);
@@ -3050,17 +3060,58 @@ function createDrawingItem(shape, labelPosition, text, type="shape", meta={}){
   registerInteractiveDrawing(drawing);
   attachDrawingLabelDomEvents(drawing);
   mapDrawingStack.push(drawing);
+  applyDrawingZoomScale(drawing);
   drawSurveyDrawingCanvas();
   return drawing;
 }
 
-function drawingLabelIcon(text){
+function drawingLabelIcon(text, scale=1){
+  const safeScale = Number.isFinite(scale) ? Math.max(0.65, Math.min(1.75, scale)) : 1;
   return L.divIcon({
     className:"",
-    html:`<div class="draw-shape-label">${escapeHtml(text)}</div>`,
+    html:`<div class="draw-shape-label" style="--draw-label-scale:${safeScale.toFixed(3)}">${escapeHtml(text)}</div>`,
     iconSize:[54,34],
     iconAnchor:[27,17]
   });
+}
+
+function currentSurveyZoom(){
+  const zoom = surveyMap?.getZoom?.();
+  return Number.isFinite(zoom) ? zoom : 16;
+}
+
+function drawingZoomScale(baseZoom=currentSurveyZoom()){
+  const zoom = currentSurveyZoom();
+  const origin = Number.isFinite(Number(baseZoom)) ? Number(baseZoom) : zoom;
+  return Math.max(0.65, Math.min(1.75, Math.pow(2, (zoom - origin) * 0.5)));
+}
+
+function scheduleSurveyDrawingScaleRefresh(){
+  if(surveyDrawingScaleFrame) return;
+  surveyDrawingScaleFrame = window.requestAnimationFrame(() => {
+    surveyDrawingScaleFrame = null;
+    updateAllDrawingZoomScales();
+  });
+}
+
+function updateAllDrawingZoomScales(){
+  for(const drawing of mapDrawingStack){
+    if(drawing?.group && drawing.label){
+      applyDrawingZoomScale(drawing);
+    }
+  }
+}
+
+function applyDrawingZoomScale(drawing){
+  if(!drawing?.label) return;
+  if(!Number.isFinite(Number(drawing.baseZoom))) drawing.baseZoom = currentSurveyZoom();
+  const scale = drawingZoomScale(drawing.baseZoom);
+  drawing.label.setIcon(drawingLabelIcon(drawing.text || "", scale));
+  attachDrawingLabelDomEvents(drawing);
+  if(drawing.type === "circle" && drawing.shape?.setRadius){
+    if(!Number.isFinite(Number(drawing.baseRadius))) drawing.baseRadius = drawing.shape.getRadius();
+    drawing.shape.setRadius(Math.max(12, Math.min(180, drawing.baseRadius * scale)));
+  }
 }
 
 function averageLatLng(points){
@@ -3419,7 +3470,7 @@ function renameDrawingItem(drawing){
     onSave:(next) => {
       if(!next || next === current) return;
       drawing.text = next;
-      drawing.label.setIcon(drawingLabelIcon(next));
+      applyDrawingZoomScale(drawing);
       attachDrawingLabelDomEvents(drawing);
       recalculateDrawCounters();
       saveMapDrawings();
@@ -3640,7 +3691,10 @@ function resizeDrawing(drawing, factor){
   if(!drawing || !Number.isFinite(factor) || factor <= 0) return;
   if(drawing.type === "circle"){
     const current = drawing.shape.getRadius();
-    drawing.shape.setRadius(Math.max(1, current * factor));
+    const nextRadius = Math.max(12, current * factor);
+    drawing.shape.setRadius(nextRadius);
+    const scale = drawingZoomScale(drawing.baseZoom);
+    drawing.baseRadius = Math.max(12, nextRadius / Math.max(0.1, scale));
     drawSurveyDrawingCanvas();
   }else{
     transformDrawingPolygon(drawing, (point, center) => ({
@@ -3771,8 +3825,9 @@ function saveMapDrawings(){
             type:"circle",
             text:item.text,
             center:compactLatLng(center),
-            radius:Math.round(item.shape.getRadius() * 100) / 100,
-            radiusUnits:item.radiusUnits || "px"
+            radius:Math.round((item.baseRadius || item.shape.getRadius()) * 100) / 100,
+            radiusUnits:item.radiusUnits || "px",
+            baseZoom:Number.isFinite(Number(item.baseZoom)) ? Number(item.baseZoom) : currentSurveyZoom()
           });
         }else if(item.shape.getLatLngs){
           records.push({
@@ -3780,7 +3835,8 @@ function saveMapDrawings(){
             type:"rectangle",
             text:item.text,
             center:compactLatLng(center),
-            corners:getPolygonCorners(item).map(compactLatLng)
+            corners:getPolygonCorners(item).map(compactLatLng),
+            baseZoom:Number.isFinite(Number(item.baseZoom)) ? Number(item.baseZoom) : currentSurveyZoom()
           });
         }
       }else if(item?.itemType === "route" && item.getLatLngs){
@@ -3823,6 +3879,7 @@ function restoreMapDrawings(){
         const radius = record.radiusUnits === "px" && Number.isFinite(savedRadius)
           ? Math.max(18, Math.min(120, savedRadius))
           : 29;
+        const baseZoom = Number.isFinite(Number(record.baseZoom)) ? Number(record.baseZoom) : currentSurveyZoom();
         const shape = L.circleMarker(center, {
           radius,
           ...drawingShapeStyle(false),
@@ -3830,17 +3887,18 @@ function restoreMapDrawings(){
           fillColor:"#5fbd65",
           className:"survey-drawing-shape"
         });
-        createDrawingItem(shape, center, record.text || "T1", "circle", { radius, radiusUnits:"px" });
+        createDrawingItem(shape, center, record.text || "T1", "circle", { radius, baseRadius:radius, radiusUnits:"px", baseZoom });
       }else if(record.kind === "drawing" && record.corners?.length){
         const corners = record.corners.map((point) => L.latLng(point.lat, point.lng));
         const center = record.center ? L.latLng(record.center.lat, record.center.lng) : L.latLngBounds(corners).getCenter();
+        const baseZoom = Number.isFinite(Number(record.baseZoom)) ? Number(record.baseZoom) : currentSurveyZoom();
         const shape = L.polygon(corners, {
           ...drawingShapeStyle(false),
           fill:true,
           fillColor:"#5fbd65",
           className:"survey-drawing-shape"
         });
-        createDrawingItem(shape, center, record.text || "G1", "rectangle");
+        createDrawingItem(shape, center, record.text || "G1", "rectangle", { baseZoom });
       }else if(record.kind === "route" && record.points?.length){
         createAccessRoute(record.points.map((point) => L.latLng(point.lat, point.lng)));
       }else if(record.kind === "label" && record.position){
