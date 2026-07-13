@@ -720,12 +720,11 @@ body.map-mode #surveyMap{
   white-space:nowrap;
 }
 .survey-pole-dot{
-  width:14px;
-  height:14px;
+  width:22px;
+  height:22px;
   border:0;
   border-radius:50%;
-  background:var(--pole-color,#1d4ed8);
-  box-shadow:0 1px 4px rgba(0,0,0,.35);
+  background:transparent;
 }
 .pole-popup{
   min-width:150px;
@@ -1017,6 +1016,7 @@ let surveyMap = null;
 let surveyStreetLayer = null;
 let surveySatelliteLayer = null;
 let surveyIsSatellite = false;
+let surveyNetworkRenderer = null;
 let surveyPoleLayer = null;
 let surveyLineLayer = null;
 let surveyLineCanvas = null;
@@ -1214,6 +1214,7 @@ function initSurveyMap(attempts=0){
     maxZoom:22,
     maxBoundsViscosity:1.0
   }).setView([52.68, -1.82], 13);
+  surveyNetworkRenderer = L.canvas({ padding:0.5 });
   surveyMap.createPane("drawingLabelPane");
   surveyMap.getPane("drawingLabelPane").style.zIndex = 720;
   surveyMap.createPane("drawingHitPane");
@@ -1247,7 +1248,12 @@ function initSurveyMap(attempts=0){
   surveyMap.on("zoom move rotate resize", () => {
     scheduleSurveyDrawingCanvasRedraw();
   });
-  surveyMap.on("zoomend moveend", () => {
+  surveyMap.on("zoomend", () => {
+    drawSurveyLineCanvas();
+    drawSurveyDrawingCanvas();
+    refreshSurveyPoleMarkers();
+  });
+  surveyMap.on("moveend", () => {
     drawSurveyDrawingCanvas();
     refreshSurveyPoleMarkers();
   });
@@ -1801,11 +1807,11 @@ function refreshSurveyPoleMarkers(forceMapPoleId=null){
 }
 
 function poleDisplayDensity(zoom){
-  if(zoom >= 17.5) return { cellSize:0, showLabels:true };
-  if(zoom >= 16.5) return { cellSize:82, showLabels:true };
-  if(zoom >= 15.5) return { cellSize:115, showLabels:true };
-  if(zoom >= 14) return { cellSize:165, showLabels:false };
-  return { cellSize:240, showLabels:false };
+  if(zoom >= 18) return { cellSize:0, showLabels:true };
+  if(zoom >= 17) return { cellSize:100, showLabels:true };
+  if(zoom >= 16) return { cellSize:155, showLabels:true };
+  if(zoom >= 14.5) return { cellSize:210, showLabels:false };
+  return { cellSize:280, showLabels:false };
 }
 
 function renderSurveyPole(point, showLabel=false){
@@ -1814,9 +1820,9 @@ function renderSurveyPole(point, showLabel=false){
     title:point.label,
     icon:L.divIcon({
       className:"",
-      html:`<div class="survey-pole-dot" style="--pole-color:${lineColorForPoints(point)}"></div>`,
-      iconSize:[14,14],
-      iconAnchor:[7,7]
+      html:`<div class="survey-pole-dot"></div>`,
+      iconSize:[22,22],
+      iconAnchor:[11,11]
     })
   }).addTo(surveyPoleLayer);
 
@@ -2176,22 +2182,57 @@ function clearSurveyLineCanvas(){
   surveyLineCanvasCtx.clearRect(0, 0, size.x, size.y);
 }
 
+function surveyNetworkStyleForZoom(){
+  const zoom = surveyMap?.getZoom?.() || 13;
+  if(zoom < 13.5){
+    return { lineWeight:0.55, lineOpacity:0.42, poleRadius:1.25, poleOpacity:0.48, dashGap:"1 10", showGapLines:false };
+  }
+  if(zoom < 15){
+    return { lineWeight:0.9, lineOpacity:0.56, poleRadius:1.7, poleOpacity:0.62, dashGap:"1 11", showGapLines:false };
+  }
+  if(zoom < 16.5){
+    return { lineWeight:1.45, lineOpacity:0.74, poleRadius:2.45, poleOpacity:0.78, dashGap:"1 12", showGapLines:true };
+  }
+  if(zoom < 18){
+    return { lineWeight:2.2, lineOpacity:0.88, poleRadius:3.45, poleOpacity:0.9, dashGap:"1 13", showGapLines:true };
+  }
+  return { lineWeight:3, lineOpacity:0.95, poleRadius:4.5, poleOpacity:0.96, dashGap:"1 14", showGapLines:true };
+}
+
 function drawSurveyLineCanvas(){
   if(!surveyMap || !surveyLineLayer) return;
   surveyLineLayer.clearLayers();
   resizeSurveyLineCanvas();
   clearSurveyLineCanvas();
-  if(!surveyLineShapes.length) return;
 
+  const visual = surveyNetworkStyleForZoom();
+  const renderer = surveyNetworkRenderer || undefined;
   for(const line of surveyLineShapes){
     if(!line.latlngs || line.latlngs.length < 2) continue;
+    if(line.isGap && !visual.showGapLines) continue;
     L.polyline(line.latlngs, {
       color:line.lineColor || "#2648d8",
-      weight:3.5,
-      opacity:0.95,
+      weight:visual.lineWeight,
+      opacity:visual.lineOpacity,
       lineCap:"round",
       lineJoin:"round",
-      dashArray:line.isGap ? "1 14" : null,
+      dashArray:line.isGap ? visual.dashGap : null,
+      smoothFactor:1.2,
+      renderer,
+      interactive:false
+    }).addTo(surveyLineLayer);
+  }
+
+  const bounds = surveyMap.getBounds().pad(0.18);
+  for(const point of surveyPolePoints){
+    if(!bounds.contains([point.lat, point.lon])) continue;
+    L.circleMarker([point.lat, point.lon], {
+      radius:visual.poleRadius,
+      stroke:false,
+      fill:true,
+      fillColor:lineColorForPoints(point),
+      fillOpacity:visual.poleOpacity,
+      renderer,
       interactive:false
     }).addTo(surveyLineLayer);
   }
