@@ -4973,8 +4973,7 @@ function renderSpanCard(span, title="Nearest span from your data"){
       <div class="state-pill">${escapeHtml(span.toPole ? `To pole ${span.toPole}` : "Selected")}</div>
       ${actions([
         copyButton("Copy span info", spanCopyText(span)),
-        mapsUrl ? linkButton("Show in Google Maps", mapsUrl, true) : "",
-        buttonHtml("Open MightyFields", "openMightyFieldsForCurrentSpan()")
+        mapsUrl ? linkButton("Show in Google Maps", mapsUrl, true) : ""
       ].filter(Boolean))}
     </article>
   `;
@@ -4983,25 +4982,6 @@ function renderSpanCard(span, title="Nearest span from your data"){
 function googleMapsUrl(lat, lon, label=""){
   const query = encodeURIComponent(`${lat},${lon}${label ? ` (${label})` : ""}`);
   return `https://www.google.com/maps/search/?api=1&query=${query}`;
-}
-
-function openMightyFieldsForCurrentSpan(){
-  const span = currentReport?.nearestSpan;
-  const configuredUrl = localStorage.getItem("treeSurveyMightyFieldsUrl") || "";
-  if(configuredUrl){
-    window.open(applyMightyFieldsUrlTemplate(configuredUrl, span), "_blank", "noopener");
-    return;
-  }
-  setElementStatus(statusEl, "Need MightyFields link format first", "error");
-  window.alert("I can wire this in once we know the MightyFields link format. If MightyFields has a web/app link for a form or job, send me an example and I can make this button open the selected span.");
-}
-
-function applyMightyFieldsUrlTemplate(url, span){
-  if(!span) return url;
-  return url
-    .replaceAll("{span}", encodeURIComponent(span.span || ""))
-    .replaceAll("{toPole}", encodeURIComponent(span.toPole || ""))
-    .replaceAll("{gridRef}", encodeURIComponent(currentReport?.gridRef || ""));
 }
 
 function renderMightyFieldsCards(span, siteGridRef){
