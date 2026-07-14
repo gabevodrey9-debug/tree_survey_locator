@@ -4673,6 +4673,9 @@ function normaliseImportedSpan(row, columnMap=null){
     easting,
     northing
   };
+  span.span = cleanImportedSpanCode(span.span);
+  span.toPole = cleanImportedSpanCode(span.toPole);
+  span.externalReference = cleanImportedSpanCode(span.externalReference);
 
   if((!span.gridRef || span.gridRef === "Unavailable") && Number.isFinite(easting) && Number.isFinite(northing)){
     span.gridRef = formatGridRef(easting, northing);
@@ -4823,6 +4826,18 @@ function getRowValue(row, names){
 
 function normaliseHeader(value){
   return String(value).toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function cleanImportedSpanCode(value){
+  const text = String(value || "").trim();
+  if(!text) return "";
+  const looksLikeLayerLabel = /[\s+|]/.test(text);
+  if(!looksLikeLayerLabel) return text;
+  const matches = text.match(/[A-Z]{2,8}\s*0*\d{1,5}[A-Z]?/ig);
+  if(!matches?.length) return text;
+  let code = matches[matches.length - 1].replace(/\s+/g, "").toUpperCase();
+  if(/^[A-Z]{2,8}\d+E$/.test(code)) code = code.slice(0, -1);
+  return code;
 }
 
 function updateW3W(){
