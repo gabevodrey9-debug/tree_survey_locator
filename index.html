@@ -2135,7 +2135,7 @@ function renderSurveyMap(fitAfterRender=true){
   drawSurveyLineCanvas();
   refreshSurveyPoleMarkers();
   setSurveyMapStage(mapLocked ? "Drawing tools" : "Frame the span");
-  setSurveyMapStatus(`${points.length} poles plotted. Links are inferred from pole names or nearest distance; use Link and Unlink to correct the map.`);
+  setSurveyMapStatus(`${points.length} poles plotted. HV is red, LV is blue. Links include inferred runs and nearby LV-to-HV joins; use Link and Unlink to correct the map.`);
 }
 
 function fitSurveyMap(){
@@ -2154,6 +2154,7 @@ function getSurveyPolePoints(){
       if(!span.mapPoleId) span.mapPoleId = createId("pole");
       const label = poleDisplayName(span);
       const parsed = parsePoleLabel(label);
+      const networkType = inferSpanNetworkType(span);
       return {
         span,
         label,
@@ -2162,20 +2163,24 @@ function getSurveyPolePoints(){
         prefix:parsed.prefix,
         number:parsed.number,
         suffix:parsed.suffix,
-        network:lineNetworkKey(span)
+        network:lineNetworkKey(span),
+        networkType
       };
     })
     .filter(Boolean);
 }
 
 function lineNetworkKey(span){
-  const voltage = normaliseSearchText(span?.voltage || "");
-  if(voltage.startsWith("lv")){
+  const networkType = inferSpanNetworkType(span);
+  if(networkType === "lv"){
     return [
       span.primaryNo || "primary",
       span.distNo || "dist",
       normaliseSearchText(span.circuitName || "circuit")
     ].join("|");
+  }
+  if(networkType === "hv"){
+    return span?.networkNumber || span?.primaryNo || span?.hvFeeder || "hv-network";
   }
   return span?.networkNumber || span?.primaryNo || "network";
 }
@@ -2426,6 +2431,7 @@ function renderSurveyLineRuns(points){
   }
 
   renderPrefixBranchJoins(groups);
+  renderLvHvServiceJoins(points);
 }
 
 function renderPrefixBranchJoins(groups){
@@ -2465,6 +2471,84 @@ function nearestMainPole(target, group){
     }
   }
   return best?.point || null;
+}
+
+function renderLvHvServiceJoins(points){
+  const hvPoints = points.filter((point) => point.networkType === "hv");
+  const lvGroups = new Map();
+  if(!hvPoints.length) return;
+
+  for(const point of points){
+    if(point.networkType !== "lv") continue;
+    const key = `${point.network}|${point.prefix || "unknown"}`;
+    if(!lvGroups.has(key)) lvGroups.set(key, []);
+    lvGroups.get(key).push(point);
+  }
+
+  for(const group of lvGroups.values()){
+    const start = findLvStartPole(group);
+    if(!start || hasAnyHvConnection(start)) continue;
+
+    const candidate = nearestHvJoinCandidate(start, hvPoints);
+    if(!candidate) continue;
+
+    drawSurveyAutoNetworkLine(candidate.point, start, candidate.distanceM > 120);
+  }
+}
+
+function findLvStartPole(group){
+  const numberedMain = group
+    .filter((point) => Number.isFinite(point.number) && !point.suffix)
+    .sort((a, b) => a.number - b.number);
+  if(numberedMain.length) return numberedMain[0];
+  return group
+    .slice()
+    .sort((a, b) => {
+      const aDist = distanceToGroupCentre(a, group);
+      const bDist = distanceToGroupCentre(b, group);
+      return aDist - bDist;
+    })[0] || null;
+}
+
+function nearestHvJoinCandidate(lvStart, hvPoints){
+  let best = null;
+  for(const hv of hvPoints){
+    const distanceM = haversineKm(lvStart.lat, lvStart.lon, hv.lat, hv.lon) * 1000;
+    const samePrimary = String(lvStart.span.primaryNo || "") && String(lvStart.span.primaryNo || "") === String(hv.span.primaryNo || "");
+    const sameNetwork = String(lvStart.span.networkNumber || "") && String(lvStart.span.networkNumber || "") === String(hv.span.networkNumber || "");
+    const limit = samePrimary || sameNetwork ? 260 : 150;
+    if(distanceM > limit) continue;
+    if(!best || distanceM < best.distanceM){
+      best = { point:hv, distanceM };
+    }
+  }
+  return best;
+}
+
+function hasAnyHvConnection(point){
+  const pointId = point?.span?.mapPoleId;
+  if(!pointId) return false;
+  const pointById = new Map(surveyPolePoints.map((item) => [item.span.mapPoleId, item]));
+  for(const link of manualMapLinks){
+    if(link.a !== pointId && link.b !== pointId) continue;
+    const other = pointById.get(link.a === pointId ? link.b : link.a);
+    if(other?.networkType === "hv") return true;
+  }
+  return surveyLineShapes.some((line) => {
+    if(!line.autoLinkId) return false;
+    const parts = line.autoLinkId.split("|");
+    if(!parts.includes(pointId)) return false;
+    const otherId = parts.find((part) => part !== pointId);
+    return pointById.get(otherId)?.networkType === "hv";
+  });
+}
+
+function distanceToGroupCentre(point, group){
+  const valid = group.filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
+  if(!valid.length) return 0;
+  const lat = valid.reduce((total, item) => total + item.lat, 0) / valid.length;
+  const lon = valid.reduce((total, item) => total + item.lon, 0) / valid.length;
+  return haversineKm(point.lat, point.lon, lat, lon) * 1000;
 }
 
 function shouldUseDistanceNetwork(group, numbered){
@@ -2516,7 +2600,23 @@ function suffixSortValue(suffix){
 function drawSurveyAutoNetworkLine(a, b, isGap=false){
   const autoLinkId = mapLinkKey(a.span.mapPoleId, b.span.mapPoleId);
   if(blockedAutoMapLinks.includes(autoLinkId)) return;
+  const alreadyDrawn = surveyLineShapes.some((line) =>
+    line.autoLinkId === autoLinkId ||
+    line.manualLinkId === autoLinkId ||
+    (line.latlngs?.length === 2 &&
+      sameLatLng(line.latlngs[0], a) &&
+      sameLatLng(line.latlngs[1], b)) ||
+    (line.latlngs?.length === 2 &&
+      sameLatLng(line.latlngs[0], b) &&
+      sameLatLng(line.latlngs[1], a))
+  );
+  if(alreadyDrawn) return;
   drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId, lineColorForPoints(a, b));
+}
+
+function sameLatLng(latlng, point){
+  if(!latlng || !point) return false;
+  return Math.abs(latlng.lat - point.lat) < 0.0000001 && Math.abs(latlng.lng - point.lon) < 0.0000001;
 }
 
 function renderManualMapLinks(){
@@ -2544,7 +2644,7 @@ function drawSurveyNetworkLine(latlngs, isGap=false, manualLinkId=null, autoLink
 }
 
 function lineColorForPoints(...points){
-  const hasHv = points.some((point) => normaliseSearchText(point?.span?.voltage || "").startsWith("hv"));
+  const hasHv = points.some((point) => point?.networkType === "hv" || inferSpanNetworkType(point?.span) === "hv");
   return hasHv ? "#d33a2c" : "#2648d8";
 }
 
@@ -5241,7 +5341,7 @@ function stripLeadingZeroes(value){
 
 function renderSpanSearchResult(span, index){
   const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
-  const voltage = voltageLabel(span.voltage);
+  const voltage = spanVoltageLabel(span);
   const mainValue = isLv && span.toPole
     ? `LV To Pole ${span.toPole}`
     : `${voltage || "Unknown"} ${span.span || "Unknown span"}`;
@@ -5303,7 +5403,7 @@ function fillFromSpanRecord(span){
     sourceNote: "Filled from your uploaded span spreadsheet."
   });
 
-  setElementStatus(spanSearchStatus, `Filled from ${voltageLabel(span.voltage) || "span"} ${span.span || ""}.`, "success");
+  setElementStatus(spanSearchStatus, `Filled from ${spanVoltageLabel(span) || "span"} ${span.span || ""}.`, "success");
   spanSearchInput.value = "";
   currentSpanMatches = [];
   spanSearchResults.innerHTML = "";
@@ -5372,7 +5472,7 @@ function renderNearestSpanChoices(spans, accuracy){
 
 function renderNearestSpanChoice(span, index){
   const isLv = normaliseSearchText(span.voltage || "").startsWith("lv");
-  const voltage = voltageLabel(span.voltage);
+  const voltage = spanVoltageLabel(span);
   const mainValue = isLv && span.toPole
     ? `LV To Pole ${span.toPole}`
     : `${voltage || "Unknown"} ${span.span || "Unknown span"}`;
@@ -5617,7 +5717,7 @@ function renderSpanCard(span, title="Nearest span from your data"){
   return `
     <article class="card feature-card" id="span">
       <h2>${escapeHtml(title)}</h2>
-      <div class="value">${escapeHtml(`${voltageLabel(span.voltage) || "Unknown"} ${span.span || "Unknown span"}`)}</div>
+      <div class="value">${escapeHtml(`${spanVoltageLabel(span) || "Unknown"} ${span.span || "Unknown span"}`)}</div>
       <div class="detail">${escapeHtml(detail)}</div>
       <div class="state-pill">${escapeHtml(span.toPole ? `To pole ${span.toPole}` : "Selected")}</div>
       ${actions([
@@ -5667,6 +5767,46 @@ function primarySubValue(span){
   return `${span.primaryNo || ""} ${cleanPrimaryName(span.primaryName)}`.trim();
 }
 
+function spanVoltageLabel(span){
+  return voltageLabel(span?.voltage) || inferSpanNetworkType(span).toUpperCase();
+}
+
+function inferSpanNetworkType(span){
+  if(!span) return "";
+  const voltage = normaliseSearchText(span.voltage || "");
+  const joined = [
+    span.voltage,
+    span.hvFeeder,
+    span.feederName,
+    span.networkNumber,
+    span.span,
+    span.toPole,
+    span.externalReference,
+    span.circuitName,
+    span.distNo
+  ].map((value) => String(value || ""));
+  const text = joined.join(" ");
+  const normal = normaliseSearchText(text);
+  let lvScore = 0;
+  let hvScore = 0;
+
+  if(voltage.startsWith("lv") || /\blv\b/i.test(span.voltage || "") || /\blow\s*voltage\b/i.test(span.voltage || "")) lvScore += 120;
+  if(voltage.startsWith("hv") || /\bhv\b/i.test(span.voltage || "") || /\b(11|33|66|132)\s*kv\b/i.test(span.voltage || "")) hvScore += 120;
+
+  if(span.distNo) lvScore += 85;
+  if(span.circuitName) lvScore += 85;
+  if(/\blv\b/i.test(text) || /\blow\s*voltage\b/i.test(text) || normal.includes("lvsub")) lvScore += 45;
+
+  if(span.hvFeeder) hvScore += 45;
+  if(span.networkNumber && !span.distNo && !span.circuitName) hvScore += 35;
+  if(/\bhv\b/i.test(text) || /\b(11|33|66|132)\s*kv\b/i.test(text)) hvScore += 55;
+
+  if(lvScore || hvScore){
+    return lvScore >= hvScore ? "lv" : "hv";
+  }
+  return "";
+}
+
 function voltageLabel(value){
   const text = String(value || "").trim();
   if(!text) return "";
@@ -5686,7 +5826,7 @@ function cleanPrimaryName(name){
 function spanCopyText(span){
   if(!span) return "";
   return [
-    `Voltage: ${voltageLabel(span.voltage) || ""}`,
+    `Voltage: ${spanVoltageLabel(span) || ""}`,
     `Span: ${span.span || ""}`,
     `To pole: ${span.toPole || ""}`,
     `Primary: ${primarySubValue(span)}`,
