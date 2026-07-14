@@ -4661,7 +4661,7 @@ function normaliseImportedSpan(row, columnMap=null){
     hvFeeder:getSpanRowValue(row, "hvFeeder", ["HV Feeder", "HVFeeder", "hvFeeder", "Feeder No", "Feeder Number"], columnMap),
     feederName:getSpanRowValue(row, "feederName", ["Feeder Name", "FeederName", "feederName"], columnMap),
     distNo:getSpanRowValue(row, "distNo", ["Dist No", "DistNo", "distNo", "LV Sub No", "LV Sub Number"], columnMap),
-    circuitName:getSpanRowValue(row, "circuitName", ["circuitName", "Circuit Name", "CircuitName", "Contract", "LV Sub Name"], columnMap),
+    circuitName:getSpanRowValue(row, "circuitName", ["circuitName", "Circuit Name", "CircuitName", "LV Sub Name"], columnMap),
     voltage:getSpanRowValue(row, "voltage", ["V", "Voltage", "voltage", "Network Voltage"], columnMap),
     span:getSpanRowValue(row, "span", ["Span", "span", "spanId", "Line No", "Line Number"], columnMap) || toPole,
     toPole,
@@ -4753,6 +4753,8 @@ function scoreSpanColumn(field, key, value){
   const text = String(value ?? "").trim();
   const compact = compactSearchText(text);
   let score = 0;
+  const adminMetaHeader = ["contract","description","status","coordinatestatus"].includes(header);
+  if(adminMetaHeader && ["primaryName","feederName","circuitName"].includes(field)) return 0;
 
   const hasAny = (items) => items.some((item) => header.includes(item) || headerText.includes(item));
   const hasAll = (items) => items.every((item) => header.includes(item) || headerText.includes(item));
@@ -4802,7 +4804,7 @@ function scoreSpanColumn(field, key, value){
     if(hasAny(["distno","distributionno","distributionsubno","lvsubno","lvsubnumber"]) || hasAll(["dist","no"]) || hasAll(["sub","no"])) score += 90;
     if(/^\d{2,6}$/.test(text)) score += 25;
   }else if(field === "circuitName"){
-    if(hasAny(["circuitname","contract","lvsubname","lvsubstationname"]) || hasAll(["circuit","name"]) || hasAll(["lv","name"])) score += 90;
+    if(hasAny(["circuitname","lvsubname","lvsubstationname"]) || hasAll(["circuit","name"]) || hasAll(["lv","name"])) score += 90;
   }else if(field === "externalReference"){
     if(hasAny(["externalreference","externalref","reference","ref","id"])) score += 85;
   }else if(field === "networkNumber"){
