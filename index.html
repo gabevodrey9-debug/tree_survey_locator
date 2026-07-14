@@ -1653,6 +1653,7 @@ function installSurveyTouchHandlers(mapEl){
   let strokePoints = [];
   let strokeStarted = false;
   let strokeMoved = false;
+  let strokeTool = null;
   let suppressClick = false;
   let pointTap = null;
   const editPointers = new Map();
@@ -1735,12 +1736,13 @@ function installSurveyTouchHandlers(mapEl){
     mapEl.setPointerCapture?.(event.pointerId);
     strokeStarted = true;
     strokeMoved = false;
+    strokeTool = mapTool;
     strokePoints = [latLngFromPointerEvent(event)];
     activeStrokePreview = L.polyline(strokePoints, {
-      color:mapTool === "route" ? "#f4c430" : "#5fbd65",
+      color:strokeTool === "route" ? "#f4c430" : "#5fbd65",
       weight:5,
       opacity:0.95,
-      dashArray:mapTool === "route" ? null : "8 6",
+      dashArray:strokeTool === "route" ? null : "8 6",
       interactive:false
     }).addTo(surveyDrawingLayer);
   }, { passive:false, capture:true });
@@ -1871,7 +1873,7 @@ function installSurveyTouchHandlers(mapEl){
         surveyDrawingLayer.removeLayer(activeStrokePreview);
         activeStrokePreview = null;
       }
-      const completedTool = mapTool;
+      const completedTool = strokeTool || mapTool;
       if(completedTool === "route") addAccessRouteFromStroke(strokePoints, strokeMoved);
       else addSurveyShapeFromStroke(completedTool, strokePoints, strokeMoved);
       setMapTool("pan");
@@ -1879,6 +1881,7 @@ function installSurveyTouchHandlers(mapEl){
         setSurveyMapStatus("Access route added for this map view.");
       }
       strokePoints = [];
+      strokeTool = null;
       setTimeout(() => {
         suppressClick = false;
       }, 650);
@@ -3123,11 +3126,6 @@ function createId(prefix){
 }
 
 function setMapTool(tool, force=false){
-  if(!force && ["tree","group","route","label"].includes(tool) && !hasActiveMapDrawingSpan()){
-    setMapTool("pan", true);
-    setSurveyMapStatus("Select a span first, then add drawings for that span.");
-    return;
-  }
   if(!force && ["pole","tree","group","link","unlink","route","label","delete"].includes(tool) && mapTool === tool){
     tool = "pan";
   }
@@ -3150,7 +3148,7 @@ function setMapTool(tool, force=false){
     group:"Draw around the group. The app will tidy it into the closest shape.",
     link:"Tap one pole, then tap the pole it should link to.",
     unlink:"Tap one pole, then tap the pole it should unlink from.",
-    route:"Draw the access route. Lift your finger to save it.",
+    route:"Draw the access route. Lift your finger to add it.",
     label:"Tap the map, then type a label.",
     delete:"Tap a drawn mark, manual link, or pole to remove it."
   };
@@ -3227,6 +3225,10 @@ function applySurveyMapTool(latlng){
 }
 
 function addSurveyShapeFromStroke(kind, points, wasDrawn=false){
+  if(kind === "route"){
+    addAccessRouteFromStroke(points, wasDrawn);
+    return;
+  }
   if(!points.length || !surveyDrawingLayer) return;
   const shapeType = wasDrawn ? closestStrokeShape(points) : "circle";
   if(shapeType === "rectangle") addSurveyRectangleShape(kind, points);
