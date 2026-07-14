@@ -2492,7 +2492,7 @@ function renderLvHvServiceJoins(points){
     const candidate = nearestHvJoinCandidate(start, hvPoints);
     if(!candidate) continue;
 
-    drawSurveyAutoNetworkLine(candidate.point, start, candidate.distanceM > 120);
+    drawSurveyAutoNetworkLine(candidate.point, start, candidate.distanceM > 120, "#2648d8");
   }
 }
 
@@ -2597,7 +2597,7 @@ function suffixSortValue(suffix){
   return value;
 }
 
-function drawSurveyAutoNetworkLine(a, b, isGap=false){
+function drawSurveyAutoNetworkLine(a, b, isGap=false, lineColorOverride=null){
   const autoLinkId = mapLinkKey(a.span.mapPoleId, b.span.mapPoleId);
   if(blockedAutoMapLinks.includes(autoLinkId)) return;
   const alreadyDrawn = surveyLineShapes.some((line) =>
@@ -2611,7 +2611,7 @@ function drawSurveyAutoNetworkLine(a, b, isGap=false){
       sameLatLng(line.latlngs[1], a))
   );
   if(alreadyDrawn) return;
-  drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId, lineColorForPoints(a, b));
+  drawSurveyNetworkLine([[a.lat, a.lon], [b.lat, b.lon]], isGap, null, autoLinkId, lineColorOverride || lineColorForPoints(a, b));
 }
 
 function sameLatLng(latlng, point){
