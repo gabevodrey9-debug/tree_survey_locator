@@ -3060,7 +3060,11 @@ function persistSpanData(){
 }
 
 function poleDisplayName(span){
-  return String(span.toPole || span.span || span.externalReference || "Pole").trim();
+  const candidates = [span.toPole, span.span, span.externalReference];
+  const clean = candidates
+    .map((value) => cleanImportedSpanCode(value))
+    .find((value) => isPoleDisplayCandidate(value));
+  return clean || cleanImportedSpanCode(candidates.find(Boolean)) || "Pole";
 }
 
 function parsePoleLabel(label){
@@ -4615,7 +4619,8 @@ function loadStoredSpanData(){
     }
 
     const rows = JSON.parse(stored);
-    window.SPAN_DATA = Array.isArray(rows) ? rows.map(repairSpanPosition).filter((span) => isUsableCoordinate(span.latitude, span.longitude)) : [];
+    window.SPAN_DATA = Array.isArray(rows) ? rows.map(repairImportedSpanRecord).filter((span) => isUsableCoordinate(span.latitude, span.longitude)) : [];
+    localStorage.setItem("treeSurveySpanData", JSON.stringify(window.SPAN_DATA));
     updateSpanDataStatus();
   }catch{
     window.SPAN_DATA = [];
@@ -4633,7 +4638,7 @@ async function loadBundledSpanData(){
     if(!match) return;
     const rows = JSON.parse(match[1]);
     const imported = Array.isArray(rows)
-      ? rows.map(repairSpanPosition).filter((span) => isUsableCoordinate(span.latitude, span.longitude))
+      ? rows.map(repairImportedSpanRecord).filter((span) => isUsableCoordinate(span.latitude, span.longitude))
       : [];
     if(!imported.length) return;
     window.SPAN_DATA = imported;
@@ -4979,7 +4984,7 @@ function normaliseImportedSpan(row, columnMap=null){
   }
 
   if(!span.span && !span.toPole && !span.gridRef) return null;
-  const repaired = repairSpanPosition(span);
+  const repaired = repairImportedSpanRecord(span);
   if(!isUsableCoordinate(repaired.latitude, repaired.longitude)) return null;
   return repaired;
 }
@@ -5079,7 +5084,8 @@ function scoreSpanColumn(field, key, value){
     if(hasAny(["topole","poleto","poleid","poleno","polenumber","structure","asset","support"])) score += 90;
     if(hasAll(["to","pole"])) score += 95;
     if(header === "pole") score += 70;
-    if(/^[A-Z]{2,6}\s*\d+[A-Z]?$/i.test(text) || /^[A-Z0-9]+\/\d+$/i.test(text)) score += 45;
+    if(isLikelyFeederNumber(text)) score -= 60;
+    if(/^[A-Z]{2,10}\s*\d{1,5}[A-Z]?$/i.test(text) || /^\d{6,9}$/.test(text)) score += 55;
   }else if(field === "span"){
     if(hasAny(["span","spanid","section","lineno","linenumber","lineid","circuitsection"])) score += 90;
     if(/^[A-Z0-9-]+\/?\d*[A-Z]?$/i.test(text) && /\d/.test(text)) score += 40;
@@ -5123,12 +5129,57 @@ function cleanImportedSpanCode(value){
   const text = String(value || "").trim();
   if(!text) return "";
   const looksLikeLayerLabel = /[\s+|]/.test(text);
-  if(!looksLikeLayerLabel) return text;
-  const matches = text.match(/[A-Z]{2,8}\s*0*\d{1,5}[A-Z]?/ig);
+  if(!looksLikeLayerLabel) return normalisePoleCode(text);
+  const matches = text.match(/[A-Z]{2,10}\s*0*\d{1,5}[A-Z]?/ig);
   if(!matches?.length) return text;
-  let code = matches[matches.length - 1].replace(/\s+/g, "").toUpperCase();
+  let code = normalisePoleCode(matches[matches.length - 1]);
   if(/^[A-Z]{2,8}\d+E$/.test(code)) code = code.slice(0, -1);
   return code;
+}
+
+function normalisePoleCode(value){
+  const text = String(value || "").trim();
+  if(!text) return "";
+  if(/^[A-Z]{2,10}\s*0*\d{1,5}[A-Z]?$/i.test(text)){
+    return text.replace(/\s+/g, "").toUpperCase();
+  }
+  return text;
+}
+
+function isPoleDisplayCandidate(value){
+  const text = String(value || "").trim();
+  if(!text) return false;
+  if(isLikelyFeederNumber(text)) return false;
+  if(/\b(spans?|tablet|consent|list|upload|coordinates?)\b/i.test(text)) return false;
+  return /^[A-Z]{2,10}\d{1,5}[A-Z]?$/i.test(text) ||
+    /^\d{6,9}$/.test(text) ||
+    /^[A-Z]{2,10}\d{1,5}[A-Z]?\/\d{1,3}$/i.test(text);
+}
+
+function isLikelyFeederNumber(value){
+  const text = String(value || "").trim();
+  return /^\d{4,8}\s*\/\s*\d{3,5}$/.test(text);
+}
+
+function repairImportedSpanRecord(span){
+  if(!span) return span;
+  const repaired = { ...span };
+  repaired.span = cleanImportedSpanCode(repaired.span);
+  repaired.toPole = cleanImportedSpanCode(repaired.toPole);
+  repaired.externalReference = cleanImportedSpanCode(repaired.externalReference);
+
+  if(!isPoleDisplayCandidate(repaired.toPole)){
+    const betterPole = [repaired.span, repaired.externalReference]
+      .map((value) => cleanImportedSpanCode(value))
+      .find((value) => isPoleDisplayCandidate(value));
+    repaired.toPole = betterPole || "";
+  }
+
+  if(!isPoleDisplayCandidate(repaired.span) && isPoleDisplayCandidate(repaired.toPole)){
+    repaired.span = repaired.toPole;
+  }
+
+  return repairSpanPosition(repaired);
 }
 
 function updateW3W(){
